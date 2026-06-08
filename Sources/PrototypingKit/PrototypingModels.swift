@@ -589,13 +589,60 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         canvasSize: PrototypingCanvasSize
     ) -> PrototypingElementFrame {
         let size = canvasSize.cgSize
-        let centerX = max(24, (size.width - defaultSize(for: component).width) / 2)
-        let centerY = max(24, (size.height - defaultSize(for: component).height) / 2)
+        let margin = size.width >= 700 ? CGFloat(40) : CGFloat(28)
+        let defaultSize = defaultSize(for: component)
+        var width = min(defaultSize.width, max(48, size.width - margin * 2))
+        var height = min(defaultSize.height, max(24, size.height - margin * 2))
+        var x = max(0, (size.width - width) / 2)
+        var y = max(0, (size.height - height) / 2)
+
+        switch component {
+        case .topNavigation:
+            width = max(120, size.width - margin * 2)
+            x = margin
+            y = margin
+        case .bottomNavigation:
+            width = max(160, size.width - margin * 2)
+            x = margin
+            y = max(margin, size.height - margin - height)
+        case .sidebar:
+            width = min(max(120, size.width * 0.2), 180)
+            height = max(220, size.height - margin * 2)
+            x = margin
+            y = margin
+        case .title:
+            x = margin
+            y = margin + 16
+        case .subtitle:
+            x = margin
+            y = margin + 68
+        case .button:
+            x = margin
+            y = min(max(margin, size.height * 0.66), max(margin, size.height - margin - height))
+        case .aiNote:
+            x = max(margin, size.width - margin - width)
+            y = margin + 60
+        case .search, .segmentedControl:
+            x = margin
+            y = margin + 96
+        case .avatar:
+            x = margin
+            y = margin + 120
+        case .tag, .toggle, .checkbox, .progress:
+            x = margin
+            y = margin + 180
+        case .arrow:
+            x = margin
+            y = min(max(margin, size.height * 0.58), max(margin, size.height - margin - height))
+        case .input, .card, .listRow, .imagePlaceholder, .chart, .table, .dialog:
+            break
+        }
+
         return PrototypingElementFrame(
-            x: Double(centerX),
-            y: Double(centerY),
-            width: Double(defaultSize(for: component).width),
-            height: Double(defaultSize(for: component).height)
+            x: Double(x),
+            y: Double(y),
+            width: Double(width),
+            height: Double(height)
         )
     }
 

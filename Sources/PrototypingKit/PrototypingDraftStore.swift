@@ -157,19 +157,19 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func addComponent(_ component: PrototypingComponent) {
         update { document in
-            let frame = PrototypingDraftDocument.defaultFrame(
+            let preferredFrame = PrototypingDraftDocument.defaultFrame(
                 for: component,
                 canvasSize: document.canvasSize
+            )
+            let frame = nextAvailableFrame(
+                preferredFrame: preferredFrame,
+                in: document
             )
             document.elements.append(
                 PrototypingCanvasElement(
                     component: component,
                     title: component.title,
-                    frame: snappedFrame(
-                        frame,
-                        canvasSize: document.canvasSize.cgSize,
-                        gridSize: CGFloat(document.gridSize)
-                    )
+                    frame: frame
                 )
             )
             if !document.enabledComponents.contains(component) {
@@ -321,6 +321,86 @@ public final class PrototypingDraftStore: ObservableObject {
             width: Double(width),
             height: Double(height)
         )
+    }
+
+    private func nextAvailableFrame(
+        preferredFrame: PrototypingElementFrame,
+        in document: PrototypingDraftDocument
+    ) -> PrototypingElementFrame {
+        let canvasSize = document.canvasSize.cgSize
+        let unit = max(4, CGFloat(document.gridSize))
+        let preferred = snappedFrame(
+            preferredFrame,
+            canvasSize: canvasSize,
+            gridSize: unit
+        )
+
+        if hasRoom(for: preferred, in: document, padding: unit) {
+            return preferred
+        }
+
+        let width = CGFloat(preferred.width)
+        let height = CGFloat(preferred.height)
+        let maxX = max(0, canvasSize.width - width)
+        let maxY = max(0, canvasSize.height - height)
+        let xPositions = gridPositions(maxValue: maxX, unit: unit)
+        let yPositions = gridPositions(maxValue: maxY, unit: unit)
+
+        let candidates = xPositions.flatMap { x in
+            yPositions.map { y in
+                PrototypingElementFrame(
+                    x: Double(x),
+                    y: Double(y),
+                    width: preferred.width,
+                    height: preferred.height
+                )
+            }
+        }
+        .sorted { lhs, rhs in
+            distance(from: lhs, to: preferred) < distance(from: rhs, to: preferred)
+        }
+
+        return candidates.first { hasRoom(for: $0, in: document, padding: unit) } ?? preferred
+    }
+
+    private func hasRoom(
+        for frame: PrototypingElementFrame,
+        in document: PrototypingDraftDocument,
+        padding: CGFloat
+    ) -> Bool {
+        let rect = frame.cgRect
+        let canvasRect = CGRect(origin: .zero, size: document.canvasSize.cgSize)
+
+        guard canvasRect.contains(rect) else { return false }
+
+        return document.elements.allSatisfy { element in
+            !rect.intersects(element.frame.cgRect.insetBy(dx: -padding, dy: -padding))
+        }
+    }
+
+    private func gridPositions(maxValue: CGFloat, unit: CGFloat) -> [CGFloat] {
+        guard maxValue > 0 else { return [0] }
+
+        var values: [CGFloat] = []
+        var value: CGFloat = 0
+
+        while value <= maxValue {
+            values.append(value)
+            value += unit
+        }
+
+        if values.last != maxValue {
+            values.append(maxValue)
+        }
+
+        return values
+    }
+
+    private func distance(
+        from lhs: PrototypingElementFrame,
+        to rhs: PrototypingElementFrame
+    ) -> Double {
+        abs(lhs.x - rhs.x) + abs(lhs.y - rhs.y)
     }
 
     private func scaledFrame(
