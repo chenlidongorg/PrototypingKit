@@ -1,5 +1,18 @@
 import SwiftUI
 
+private enum PrototypingKitColors {
+    static let surface = Color(red: 0.98, green: 0.985, blue: 0.99)
+    static let panel = Color.white
+    static let canvasSurface = Color(red: 0.965, green: 0.972, blue: 0.98)
+    static let controlSurface = Color(red: 0.94, green: 0.965, blue: 0.99)
+    static let controlSurfaceMuted = Color(red: 0.965, green: 0.968, blue: 0.972)
+    static let ink = Color(red: 0.10, green: 0.12, blue: 0.16)
+    static let secondaryInk = Color(red: 0.44, green: 0.49, blue: 0.56)
+    static let subtleInk = Color(red: 0.62, green: 0.66, blue: 0.72)
+    static let accent = Color(red: 0.02, green: 0.48, blue: 0.98)
+    static let separator = Color.black.opacity(0.12)
+}
+
 @available(iOS 14.0, macCatalyst 14.0, *)
 public struct PrototypingKitView: View {
     @ObservedObject private var store: PrototypingDraftStore
@@ -26,7 +39,10 @@ public struct PrototypingKitView: View {
             Divider()
             content
         }
-        .background(Color.white)
+        .background(PrototypingKitColors.surface)
+        .foregroundColor(PrototypingKitColors.ink)
+        .accentColor(PrototypingKitColors.accent)
+        .environment(\.colorScheme, .light)
         .alert(isPresented: $showAlert) {
             Alert(title: Text("原型设计测试版"), message: Text(alertMessage), dismissButton: .default(Text("好")))
         }
@@ -37,11 +53,13 @@ public struct PrototypingKitView: View {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(PrototypingKitColors.secondaryInk)
             }
             .buttonStyle(PlainButtonStyle())
 
             TextField("标题", text: titleBinding)
                 .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(PrototypingKitColors.ink)
                 .textFieldStyle(PlainTextFieldStyle())
 
             Button(action: store.createNewDraft) {
@@ -62,7 +80,7 @@ public struct PrototypingKitView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.blue)
+                    .background(PrototypingKitColors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(PlainButtonStyle())
@@ -87,7 +105,7 @@ public struct PrototypingKitView: View {
                         )
                         .padding(28)
                 }
-                .background(Color.gray.opacity(0.06))
+                .background(PrototypingKitColors.canvasSurface)
 
                 Divider()
 
@@ -102,9 +120,11 @@ public struct PrototypingKitView: View {
             HStack {
                 Text("最近草稿")
                     .font(.headline)
+                    .foregroundColor(PrototypingKitColors.ink)
                 Spacer()
                 Button(action: store.createNewDraft) {
                     Image(systemName: "plus.circle.fill")
+                        .foregroundColor(PrototypingKitColors.accent)
                 }
             }
 
@@ -185,7 +205,17 @@ public struct PrototypingKitView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     sectionTitle("AI标注")
                     TextField("例如：核心功能", text: noteBinding)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .font(.system(size: 14))
+                        .foregroundColor(PrototypingKitColors.ink)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .background(PrototypingKitColors.panel)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(PrototypingKitColors.separator, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
             .padding(16)
@@ -226,7 +256,7 @@ public struct PrototypingKitView: View {
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.secondary)
+            .foregroundColor(PrototypingKitColors.secondaryInk)
     }
 
     private func insertIntoHost() {
@@ -255,26 +285,27 @@ private struct DraftRecordRow: View {
     var body: some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.blue.opacity(0.18) : Color.gray.opacity(0.12))
+                .fill(isSelected ? PrototypingKitColors.accent.opacity(0.16) : PrototypingKitColors.controlSurfaceMuted)
                 .frame(width: 44, height: 52)
                 .overlay(
                     Image(systemName: "rectangle.3.group")
-                        .foregroundColor(isSelected ? .blue : .gray)
+                        .foregroundColor(isSelected ? PrototypingKitColors.accent : PrototypingKitColors.subtleInk)
                 )
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(record.title)
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(PrototypingKitColors.ink)
                     .lineLimit(1)
                 Text(formattedUpdatedAt)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(PrototypingKitColors.secondaryInk)
             }
 
             Spacer()
         }
         .padding(8)
-        .background(isSelected ? Color.blue.opacity(0.08) : Color.clear)
+        .background(isSelected ? PrototypingKitColors.accent.opacity(0.08) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -294,10 +325,10 @@ private struct ChoiceChip: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .blue : .primary)
+                .foregroundColor(isSelected ? PrototypingKitColors.accent : PrototypingKitColors.ink)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(isSelected ? Color.blue.opacity(0.12) : Color.gray.opacity(0.08))
+                .background(isSelected ? PrototypingKitColors.accent.opacity(0.12) : PrototypingKitColors.controlSurfaceMuted)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(PlainButtonStyle())
@@ -316,14 +347,15 @@ private struct TemplateCard: View {
                     .frame(height: 78)
                 Text(template.title)
                     .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? PrototypingKitColors.accent : PrototypingKitColors.ink)
                     .lineLimit(1)
             }
             .padding(8)
             .frame(maxWidth: .infinity)
-            .background(isSelected ? Color.blue.opacity(0.12) : Color.gray.opacity(0.06))
+            .background(isSelected ? PrototypingKitColors.accent.opacity(0.12) : PrototypingKitColors.controlSurfaceMuted)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue.opacity(0.55) : Color.black.opacity(0.08), lineWidth: 1)
+                    .stroke(isSelected ? PrototypingKitColors.accent.opacity(0.55) : PrototypingKitColors.separator, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
