@@ -468,31 +468,13 @@ public struct PrototypingKitView: View {
                     .buttonStyle(PlainButtonStyle())
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("选择")
-
-                    HStack(spacing: 8) {
-                        ChoiceChip(title: "多选", isSelected: isMultiSelectionEnabled) {
-                            toggleMultiSelection()
-                        }
-                        .frame(width: 78)
-
-                        Text(selectedSummary)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(PrototypingKitColors.secondaryInk)
-                            .frame(minWidth: 48, alignment: .leading)
-
-                        Button(action: deselectElement) {
-                            Text("清空")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(PrototypingKitColors.secondaryInk)
-                                .padding(.horizontal, 10)
-                                .frame(height: 34)
-                                .background(PrototypingKitColors.controlSurfaceMuted)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                HStack {
+                    ChoiceChip(title: "多选", isSelected: isMultiSelectionEnabled) {
+                        toggleMultiSelection()
                     }
+                    .frame(width: 78)
+
+                    Spacer()
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -742,10 +724,6 @@ public struct PrototypingKitView: View {
         selectedElementIDs.count == 1 ? selectedElementIDs.first : nil
     }
 
-    private var selectedSummary: String {
-        selectedElementIDs.isEmpty ? "未选择" : "已选 \(selectedElementIDs.count)"
-    }
-
     private func selectElement(_ id: String) {
         selectedElementIDs = [id]
         store.bringElementToFront(id: id)
@@ -766,10 +744,8 @@ public struct PrototypingKitView: View {
 
     private func toggleMultiSelection() {
         isMultiSelectionEnabled.toggle()
-        if !isMultiSelectionEnabled, let selectedElementID = singleSelectedElementID {
-            selectedElementIDs = [selectedElementID]
-        } else if !isMultiSelectionEnabled {
-            selectedElementIDs = selectedElementIDs.first.map { [$0] } ?? []
+        if !isMultiSelectionEnabled {
+            selectedElementIDs = []
         }
     }
 
