@@ -610,8 +610,7 @@ public struct PrototypingKitView: View {
                     selectedTemplate: store.currentDocument.template,
                     onClose: { activeLibrary = nil },
                     onSelect: { template in
-                        activeLibrary = nil
-                        applyTemplateFromUI(template)
+                        selectTemplateFromLibrary(template)
                     }
                 )
             case .components:
@@ -744,6 +743,13 @@ public struct PrototypingKitView: View {
             commitTemplate(template)
         } else {
             activeAlert = .applyTemplate(template)
+        }
+    }
+
+    private func selectTemplateFromLibrary(_ template: PrototypingTemplate) {
+        activeLibrary = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            applyTemplateFromUI(template)
         }
     }
 

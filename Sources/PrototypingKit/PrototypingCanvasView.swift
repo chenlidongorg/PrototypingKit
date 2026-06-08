@@ -141,7 +141,7 @@ private func annotationText(for element: PrototypingCanvasElement, fallback note
         return title
     }
 
-    return fallbackText.isEmpty ? "核心功能" : fallbackText
+    return fallbackText.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : fallbackText
 }
 
 private struct PrototypingCanvasElementsLayer: View {
@@ -1606,7 +1606,7 @@ private struct PhoneWireframe: View {
     }
 
     private var note: some View {
-        Text(document.note.isEmpty ? "核心功能" : document.note)
+        Text(document.note.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : document.note)
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(.black.opacity(0.82))
             .padding(.horizontal, 12)
@@ -1645,7 +1645,7 @@ private struct WebWireframe: View {
         .overlay(
             Group {
                 if document.enabledComponents.contains(.aiNote) {
-                    Text(document.note.isEmpty ? "核心功能" : document.note)
+                    Text(document.note.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : document.note)
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

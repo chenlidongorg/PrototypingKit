@@ -435,6 +435,8 @@ public struct PrototypingDraftBoard: Codable, Identifiable, Hashable {
 }
 
 public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
+    public static let defaultAnnotationText = "注释文字"
+
     public var id: String
     public var title: String
     public var createdAt: Date
@@ -467,7 +469,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         gridSize: Double = 12,
         enabledComponents: [PrototypingComponent] = [.title, .search, .card, .listRow, .bottomNavigation, .aiNote],
         elements: [PrototypingCanvasElement]? = nil,
-        note: String = "核心功能",
+        note: String = PrototypingDraftDocument.defaultAnnotationText,
         activeBoardID: String? = nil,
         boards: [String: PrototypingDraftBoard]? = nil,
         orientationPreferences: [String: PrototypingDeviceOrientation]? = nil
@@ -537,7 +539,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             ?? (canvasSize.width > canvasSize.height ? .landscape : .portrait)
         gridSize = try container.decodeIfPresent(Double.self, forKey: .gridSize) ?? 12
         enabledComponents = try container.decodeIfPresent([PrototypingComponent].self, forKey: .enabledComponents) ?? []
-        note = try container.decodeIfPresent(String.self, forKey: .note) ?? "核心功能"
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? Self.defaultAnnotationText
         elements = try container.decodeIfPresent([PrototypingCanvasElement].self, forKey: .elements)
             ?? PrototypingDraftDocument.defaultElements(for: template, canvasSize: canvasSize)
         activeBoardID = try container.decodeIfPresent(String.self, forKey: .activeBoardID)
@@ -976,7 +978,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             x = margin
             y = min(max(margin, size.height * 0.66), max(margin, size.height - margin - height))
         case .aiNote:
-            let annotationSize = annotationPreferredSize(for: "核心功能", canvasSize: size)
+            let annotationSize = annotationPreferredSize(for: Self.defaultAnnotationText, canvasSize: size)
             width = annotationSize.width
             height = annotationSize.height
             x = max(margin, size.width - margin - width)
@@ -1141,7 +1143,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         canvasSize: CGSize
     ) -> CGSize {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedText = text.isEmpty ? "核心功能" : text
+        let resolvedText = text.isEmpty ? Self.defaultAnnotationText : text
         let minimum = minimumSize(for: .aiNote)
         let maximum = maximumSize(for: .aiNote, canvasSize: canvasSize)
         let font = UIFont.systemFont(ofSize: 14, weight: .semibold)
