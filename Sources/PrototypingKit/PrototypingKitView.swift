@@ -224,10 +224,7 @@ public struct PrototypingKitView: View {
         return ZStack(alignment: .topTrailing) {
             ScrollViewReader { scrollProxy in
                 ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                    ZStack(alignment: .topLeading) {
-                        Color.clear
-                            .frame(width: contentSize.width, height: contentSize.height)
-
+                    ZStack {
                         PrototypingEditableDraftCanvas(
                             document: store.currentDocument,
                             selectedElementIDs: selectedElementIDs,
@@ -248,19 +245,14 @@ public struct PrototypingKitView: View {
                             onDelete: deleteElement
                         )
                         .frame(width: canvasSize.width, height: canvasSize.height)
-                        .scaleEffect(scale, anchor: .topLeading)
-                        .frame(width: scaledCanvasSize.width, height: scaledCanvasSize.height, alignment: .topLeading)
-                        .offset(
-                            x: max(stageMargin, (contentSize.width - scaledCanvasSize.width) / 2),
-                            y: max(stageMargin, (contentSize.height - scaledCanvasSize.height) / 2)
-                        )
+                        .scaleEffect(scale, anchor: .center)
+                        .frame(width: scaledCanvasSize.width, height: scaledCanvasSize.height)
 
                         Color.clear
                             .frame(width: 1, height: 1)
-                            .position(x: contentSize.width / 2, y: contentSize.height / 2)
                             .id(stageCenterAnchorID)
                     }
-                    .frame(width: contentSize.width, height: contentSize.height, alignment: .topLeading)
+                    .frame(width: contentSize.width, height: contentSize.height, alignment: .center)
                 }
                 .background(PrototypingKitColors.canvasSurface)
                 .onAppear {
