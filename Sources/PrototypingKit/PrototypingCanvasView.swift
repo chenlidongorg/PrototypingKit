@@ -36,6 +36,7 @@ struct PrototypingEditableDraftCanvas: View {
     let document: PrototypingDraftDocument
     let selectedElementID: String?
     let onSelect: (String) -> Void
+    let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
     let onDelete: (String) -> Void
 
@@ -48,6 +49,7 @@ struct PrototypingEditableDraftCanvas: View {
             PrototypingCanvasInteractionOverlay(
                 document: document,
                 onSelect: onSelect,
+                onDeselect: onDeselect,
                 onMove: onMove,
                 onDelete: onDelete
             )
@@ -114,6 +116,7 @@ private struct PrototypingElementContainer: View {
 private struct PrototypingCanvasInteractionOverlay: View {
     let document: PrototypingDraftDocument
     let onSelect: (String) -> Void
+    let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
     let onDelete: (String) -> Void
 
@@ -126,7 +129,10 @@ private struct PrototypingCanvasInteractionOverlay: View {
                 hitElement(at: point) != nil
             },
             onSingleTap: { point in
-                guard let element = hitElement(at: point) else { return }
+                guard let element = hitElement(at: point) else {
+                    onDeselect()
+                    return
+                }
                 onSelect(element.id)
             },
             onDoubleTap: { point in

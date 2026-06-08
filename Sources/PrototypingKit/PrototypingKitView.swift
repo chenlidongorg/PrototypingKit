@@ -103,6 +103,7 @@ public struct PrototypingKitView: View {
                         document: store.currentDocument,
                         selectedElementID: selectedElementID,
                         onSelect: selectElement,
+                        onDeselect: deselectElement,
                         onMove: { id, frame, persist in
                             let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
                             store.moveElement(id: id, to: snappedFrame, persist: persist)
@@ -269,6 +270,10 @@ public struct PrototypingKitView: View {
     private func selectElement(_ id: String) {
         selectedElementID = id
         store.bringElementToFront(id: id)
+    }
+
+    private func deselectElement() {
+        selectedElementID = nil
     }
 
     private func sectionTitle(_ text: String) -> some View {
