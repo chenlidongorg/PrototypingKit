@@ -46,6 +46,10 @@ struct PrototypingEditableDraftCanvas: View {
                 document: document,
                 selectedElementID: selectedElementID
             )
+            SnapGuideOverlay(
+                document: document,
+                selectedElementID: selectedElementID
+            )
             PrototypingCanvasInteractionOverlay(
                 document: document,
                 onSelect: onSelect,
@@ -145,6 +149,62 @@ private struct SelectionChrome: View {
             CGPoint(x: 0, y: size.height),
             CGPoint(x: size.width, y: size.height)
         ]
+    }
+}
+
+private struct SnapGuideOverlay: View {
+    let document: PrototypingDraftDocument
+    let selectedElementID: String?
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let rect = selectedRect {
+                Path { path in
+                    for x in [rect.minX, rect.maxX] {
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: proxy.size.height))
+                    }
+
+                    for y in [rect.minY, rect.maxY] {
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: proxy.size.width, y: y))
+                    }
+                }
+                .stroke(
+                    Color.blue.opacity(0.42),
+                    style: StrokeStyle(lineWidth: 1.3, lineCap: .round, dash: [7, 5])
+                )
+
+                GuideTag(text: "grid \(Int(document.gridSize))")
+                    .position(x: min(rect.maxX + 34, proxy.size.width - 34), y: max(rect.minY - 14, 14))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var selectedRect: CGRect? {
+        guard let selectedElementID,
+              let element = document.elements.first(where: { $0.id == selectedElementID })
+        else {
+            return nil
+        }
+
+        return element.frame.cgRect
+    }
+}
+
+private struct GuideTag: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.blue.opacity(0.86))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.88))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.blue.opacity(0.24), lineWidth: 1))
     }
 }
 
