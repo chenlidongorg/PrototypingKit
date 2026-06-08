@@ -291,6 +291,34 @@ public struct PrototypingElementFrame: Codable, Hashable {
         let nextY = max(0, min(canvasSize.height - height, y + Double(translation.height)))
         return PrototypingElementFrame(x: nextX, y: nextY, width: width, height: height)
     }
+
+    public func constrained(
+        inside canvasSize: CGSize,
+        minimumSize: CGSize,
+        maximumSize: CGSize
+    ) -> PrototypingElementFrame {
+        let proposedWidth = CGFloat(width)
+        let proposedHeight = CGFloat(height)
+        let proposedX = CGFloat(x)
+        let proposedY = CGFloat(y)
+        let resolvedWidth = min(
+            min(maximumSize.width, canvasSize.width),
+            max(minimumSize.width, proposedWidth)
+        )
+        let resolvedHeight = min(
+            min(maximumSize.height, canvasSize.height),
+            max(minimumSize.height, proposedHeight)
+        )
+        let resolvedX = max(0, min(canvasSize.width - resolvedWidth, proposedX))
+        let resolvedY = max(0, min(canvasSize.height - resolvedHeight, proposedY))
+
+        return PrototypingElementFrame(
+            x: Double(resolvedX),
+            y: Double(resolvedY),
+            width: Double(resolvedWidth),
+            height: Double(resolvedHeight)
+        )
+    }
 }
 
 public struct PrototypingCanvasPoint: Codable, Hashable {
@@ -423,6 +451,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public var note: String
     public var activeBoardID: String
     public var boards: [String: PrototypingDraftBoard]
+    public var orientationPreferences: [String: PrototypingDeviceOrientation]
 
     public init(
         id: String = UUID().uuidString,
@@ -440,7 +469,8 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         elements: [PrototypingCanvasElement]? = nil,
         note: String = "核心功能",
         activeBoardID: String? = nil,
-        boards: [String: PrototypingDraftBoard]? = nil
+        boards: [String: PrototypingDraftBoard]? = nil,
+        orientationPreferences: [String: PrototypingDeviceOrientation]? = nil
     ) {
         let normalizedKind = kind.normalized
         let resolvedCanvasSize = canvasSize ?? (normalizedKind == .webPage ? .web : device.canvasSize(for: orientation))
@@ -464,6 +494,8 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             orientation: orientation
         )
         self.boards = boards ?? [:]
+        self.orientationPreferences = orientationPreferences
+            ?? PrototypingDraftDocument.defaultOrientationPreferences(device: device, orientation: orientation)
         syncActiveBoardFromCompatibilityFields()
         ensureStandardBoards()
         loadActiveBoard()
@@ -486,6 +518,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         case note
         case activeBoardID
         case boards
+        case orientationPreferences
     }
 
     public init(from decoder: Decoder) throws {
@@ -510,6 +543,8 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         activeBoardID = try container.decodeIfPresent(String.self, forKey: .activeBoardID)
             ?? PrototypingDraftDocument.boardID(kind: kind, device: device, orientation: orientation)
         boards = try container.decodeIfPresent([String: PrototypingDraftBoard].self, forKey: .boards) ?? [:]
+        orientationPreferences = try container.decodeIfPresent([String: PrototypingDeviceOrientation].self, forKey: .orientationPreferences)
+            ?? PrototypingDraftDocument.defaultOrientationPreferences(device: device, orientation: orientation)
         syncActiveBoardFromCompatibilityFields()
         ensureStandardBoards()
         loadActiveBoard()
@@ -564,6 +599,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         kind = targetKind.normalized
         device = targetDevice
         orientation = targetOrientation
+        setPreferredOrientation(targetOrientation, for: targetDevice)
         activeBoardID = PrototypingDraftDocument.boardID(
             kind: kind,
             device: device,
@@ -576,6 +612,9 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public mutating func syncActiveBoardFromCompatibilityFields() {
         kind = kind.normalized
         canvasSize = kind == .webPage ? .web : device.canvasSize(for: orientation)
+        if kind != .webPage {
+            setPreferredOrientation(orientation, for: device)
+        }
         activeBoardID = PrototypingDraftDocument.boardID(
             kind: kind,
             device: device,
@@ -628,9 +667,37 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         template = board.template
         device = board.device ?? device
         orientation = board.orientation ?? orientation
+        if kind != .webPage {
+            setPreferredOrientation(orientation, for: device)
+        }
         canvasSize = board.canvasSize
         enabledComponents = board.enabledComponents
         elements = board.elements
+    }
+
+    public func preferredOrientation(for device: PrototypingDeviceKind) -> PrototypingDeviceOrientation {
+        orientationPreferences[device.rawValue] ?? .portrait
+    }
+
+    public mutating func setPreferredOrientation(
+        _ orientation: PrototypingDeviceOrientation,
+        for device: PrototypingDeviceKind
+    ) {
+        orientationPreferences[device.rawValue] = orientation
+    }
+
+    public mutating func resizeAnnotationElementsForCurrentNote() {
+        let size = canvasSize.cgSize
+        elements = elements.map { element in
+            guard element.component == .aiNote else { return element }
+            var copy = element
+            copy.frame = PrototypingDraftDocument.annotationFrame(
+                for: note,
+                existingFrame: element.frame,
+                canvasSize: size
+            )
+            return copy
+        }
     }
 
     public func exportDocumentsForCurrentKind(boardIDs selectedBoardIDs: [String]? = nil) -> [PrototypingDraftDocument] {
@@ -895,6 +962,9 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             x = margin
             y = min(max(margin, size.height * 0.66), max(margin, size.height - margin - height))
         case .aiNote:
+            let annotationSize = annotationPreferredSize(for: "核心功能", canvasSize: size)
+            width = annotationSize.width
+            height = annotationSize.height
             x = max(margin, size.width - margin - width)
             y = margin + 60
         case .search, .segmentedControl:
@@ -966,8 +1036,108 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         case .arrow:
             return CGSize(width: 150, height: 42)
         case .aiNote:
-            return CGSize(width: 112, height: 38)
+            return CGSize(width: 128, height: 44)
         }
+    }
+
+    public static func minimumSize(for component: PrototypingComponent) -> CGSize {
+        switch component {
+        case .title:
+            return CGSize(width: 88, height: 28)
+        case .subtitle:
+            return CGSize(width: 96, height: 24)
+        case .button:
+            return CGSize(width: 86, height: 36)
+        case .input:
+            return CGSize(width: 120, height: 36)
+        case .search:
+            return CGSize(width: 132, height: 36)
+        case .card:
+            return CGSize(width: 140, height: 72)
+        case .listRow:
+            return CGSize(width: 132, height: 44)
+        case .imagePlaceholder:
+            return CGSize(width: 96, height: 76)
+        case .bottomNavigation:
+            return CGSize(width: 180, height: 56)
+        case .topNavigation:
+            return CGSize(width: 180, height: 42)
+        case .segmentedControl:
+            return CGSize(width: 132, height: 34)
+        case .avatar:
+            return CGSize(width: 44, height: 44)
+        case .tag:
+            return CGSize(width: 62, height: 26)
+        case .toggle:
+            return CGSize(width: 46, height: 28)
+        case .checkbox:
+            return CGSize(width: 72, height: 26)
+        case .progress:
+            return CGSize(width: 96, height: 14)
+        case .chart:
+            return CGSize(width: 160, height: 96)
+        case .table:
+            return CGSize(width: 170, height: 116)
+        case .sidebar:
+            return CGSize(width: 82, height: 180)
+        case .dialog:
+            return CGSize(width: 120, height: 48)
+        case .arrow:
+            return CGSize(width: 76, height: 30)
+        case .aiNote:
+            return CGSize(width: 96, height: 38)
+        }
+    }
+
+    public static func maximumSize(
+        for component: PrototypingComponent,
+        canvasSize: CGSize
+    ) -> CGSize {
+        switch component {
+        case .aiNote:
+            let maxWidth = min(max(180, canvasSize.width * 0.72), canvasSize.width - 24)
+            let maxHeight = min(150, canvasSize.height - 24)
+            return CGSize(width: maxWidth, height: maxHeight)
+        default:
+            return CGSize(width: canvasSize.width, height: canvasSize.height)
+        }
+    }
+
+    public static func annotationFrame(
+        for note: String,
+        existingFrame: PrototypingElementFrame,
+        canvasSize: CGSize
+    ) -> PrototypingElementFrame {
+        let size = annotationPreferredSize(for: note, canvasSize: canvasSize)
+        let frame = PrototypingElementFrame(
+            x: existingFrame.x,
+            y: existingFrame.y,
+            width: Double(size.width),
+            height: Double(size.height)
+        )
+        return frame.constrained(
+            inside: canvasSize,
+            minimumSize: minimumSize(for: .aiNote),
+            maximumSize: maximumSize(for: .aiNote, canvasSize: canvasSize)
+        )
+    }
+
+    public static func annotationPreferredSize(
+        for note: String,
+        canvasSize: CGSize
+    ) -> CGSize {
+        let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let characterCount = max(4, text.count)
+        let minimum = minimumSize(for: .aiNote)
+        let maximum = maximumSize(for: .aiNote, canvasSize: canvasSize)
+        let preferredWidth = CGFloat(76 + min(characterCount, 26) * 7)
+        let width = min(maximum.width, max(minimum.width, preferredWidth))
+        let charactersPerLine = max(6, Int((width - 22) / 7))
+        let lineCount = max(1, Int(ceil(Double(characterCount) / Double(charactersPerLine))))
+        let preferredHeight = CGFloat(20 + min(lineCount, 5) * 18)
+        let height = min(maximum.height, max(minimum.height, preferredHeight))
+
+        return CGSize(width: width, height: height)
     }
 
     private static func element(
@@ -1010,6 +1180,18 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         }
 
         return [.title, .button, .input, .search, .card, .listRow, .imagePlaceholder, .bottomNavigation, .aiNote]
+    }
+
+    private static func defaultOrientationPreferences(
+        device: PrototypingDeviceKind,
+        orientation: PrototypingDeviceOrientation
+    ) -> [String: PrototypingDeviceOrientation] {
+        var preferences: [String: PrototypingDeviceOrientation] = [
+            PrototypingDeviceKind.phone.rawValue: .portrait,
+            PrototypingDeviceKind.tablet.rawValue: .portrait
+        ]
+        preferences[device.rawValue] = orientation
+        return preferences
     }
 }
 

@@ -92,6 +92,44 @@ private func annotationAnchorPoint(in rect: CGRect, anchor: PrototypingAnnotatio
     }
 }
 
+private func annotationControlPoint(in rect: CGRect, anchor: PrototypingAnnotationAnchor) -> CGPoint {
+    let point = annotationAnchorPoint(in: rect, anchor: anchor)
+    let offset: CGFloat = 18
+
+    switch anchor {
+    case .top:
+        return CGPoint(x: point.x, y: point.y - offset)
+    case .bottom:
+        return CGPoint(x: point.x, y: point.y + offset)
+    case .left:
+        return CGPoint(x: point.x - offset, y: point.y)
+    case .right:
+        return CGPoint(x: point.x + offset, y: point.y)
+    }
+}
+
+private enum PrototypingResizeEdge: String, CaseIterable, Identifiable {
+    case top
+    case bottom
+    case left
+    case right
+
+    var id: String { rawValue }
+}
+
+private func resizeHandlePoint(in rect: CGRect, edge: PrototypingResizeEdge) -> CGPoint {
+    switch edge {
+    case .top:
+        return CGPoint(x: rect.midX, y: rect.minY)
+    case .bottom:
+        return CGPoint(x: rect.midX, y: rect.maxY)
+    case .left:
+        return CGPoint(x: rect.minX, y: rect.midY)
+    case .right:
+        return CGPoint(x: rect.maxX, y: rect.midY)
+    }
+}
+
 private func clampedPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
     CGPoint(
         x: min(max(0, point.x), size.width),
@@ -221,8 +259,19 @@ private struct SelectionChrome: View {
                             .fill(Color.orange.opacity(0.96))
                             .overlay(Circle().stroke(Color.white, lineWidth: 2))
                             .frame(width: 12, height: 12)
-                            .position(annotationAnchorPoint(in: CGRect(origin: .zero, size: proxy.size), anchor: anchor))
+                            .position(annotationControlPoint(in: CGRect(origin: .zero, size: proxy.size), anchor: anchor))
                     }
+                }
+
+                ForEach(PrototypingResizeEdge.allCases) { edge in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(Color.blue.opacity(0.92), lineWidth: 2)
+                        )
+                        .frame(width: 13, height: 13)
+                        .position(resizeHandlePoint(in: CGRect(origin: .zero, size: proxy.size), edge: edge))
                 }
             }
         }
@@ -306,18 +355,38 @@ private struct PrototypingCanvasInteractionOverlay: View {
     @State private var draggingElementID: String?
     @State private var draggingStartFrame: PrototypingElementFrame?
     @State private var draggingAnnotation: AnnotationDrag?
+    @State private var draggingResize: ResizeDrag?
 
     private struct AnnotationDrag {
         let elementID: String
         let anchor: PrototypingAnnotationAnchor
     }
 
+    private struct ResizeDrag {
+        let elementID: String
+        let edge: PrototypingResizeEdge
+        let startFrame: PrototypingElementFrame
+        let component: PrototypingComponent
+    }
+
     var body: some View {
         PrototypingCanvasGestureView(
             canBeginPan: { point in
-                hitAnnotationControl(at: point) != nil || hitElement(at: point) != nil
+                hitAnnotationControl(at: point) != nil
+                    || hitResizeControl(at: point) != nil
+                    || hitElement(at: point) != nil
             },
             onSingleTap: { point in
+                if let annotationControl = hitAnnotationControl(at: point) {
+                    onSelect(annotationControl.elementID)
+                    return
+                }
+
+                if let resizeControl = hitResizeControl(at: point) {
+                    onSelect(resizeControl.elementID)
+                    return
+                }
+
                 guard let element = hitElement(at: point) else {
                     onDeselect()
                     return
@@ -331,9 +400,19 @@ private struct PrototypingCanvasInteractionOverlay: View {
             onPanBegan: { point in
                 if let annotationControl = hitAnnotationControl(at: point) {
                     draggingAnnotation = annotationControl
+                    draggingResize = nil
                     draggingElementID = nil
                     draggingStartFrame = nil
                     onSelect(annotationControl.elementID)
+                    return
+                }
+
+                if let resizeControl = hitResizeControl(at: point) {
+                    draggingResize = resizeControl
+                    draggingAnnotation = nil
+                    draggingElementID = nil
+                    draggingStartFrame = nil
+                    onSelect(resizeControl.elementID)
                     return
                 }
 
@@ -341,11 +420,13 @@ private struct PrototypingCanvasInteractionOverlay: View {
                     draggingElementID = nil
                     draggingStartFrame = nil
                     draggingAnnotation = nil
+                    draggingResize = nil
                     return
                 }
                 draggingElementID = element.id
                 draggingStartFrame = element.frame
                 draggingAnnotation = nil
+                draggingResize = nil
                 onSelect(element.id)
             },
             onPanChanged: { point, translation in
@@ -356,6 +437,17 @@ private struct PrototypingCanvasInteractionOverlay: View {
                         annotationTarget(at: point, for: draggingAnnotation),
                         false
                     )
+                    return
+                }
+
+                if let draggingResize {
+                    let frame = resizedFrame(
+                        from: draggingResize.startFrame,
+                        edge: draggingResize.edge,
+                        translation: translation,
+                        component: draggingResize.component
+                    )
+                    onMove(draggingResize.elementID, frame, false)
                     return
                 }
 
@@ -375,6 +467,18 @@ private struct PrototypingCanvasInteractionOverlay: View {
                     return
                 }
 
+                if let draggingResize {
+                    let frame = resizedFrame(
+                        from: draggingResize.startFrame,
+                        edge: draggingResize.edge,
+                        translation: translation,
+                        component: draggingResize.component
+                    )
+                    onMove(draggingResize.elementID, frame, true)
+                    self.draggingResize = nil
+                    return
+                }
+
                 guard let draggingElementID, let draggingStartFrame else { return }
                 let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
                 onMove(draggingElementID, frame, true)
@@ -389,8 +493,8 @@ private struct PrototypingCanvasInteractionOverlay: View {
         let rect = selectedAnnotation.frame.cgRect
 
         for anchor in PrototypingAnnotationAnchor.allCases {
-            let anchorPoint = annotationAnchorPoint(in: rect, anchor: anchor)
-            if distance(from: point, to: anchorPoint) <= 18 {
+            let controlPoint = annotationControlPoint(in: rect, anchor: anchor)
+            if distance(from: point, to: controlPoint) <= 18 {
                 return AnnotationDrag(elementID: selectedAnnotation.id, anchor: anchor)
             }
         }
@@ -398,6 +502,25 @@ private struct PrototypingCanvasInteractionOverlay: View {
         if let arrow = selectedAnnotation.annotationArrow,
            distance(from: point, to: arrow.target.cgPoint) <= 20 {
             return AnnotationDrag(elementID: selectedAnnotation.id, anchor: arrow.anchor)
+        }
+
+        return nil
+    }
+
+    private func hitResizeControl(at point: CGPoint) -> ResizeDrag? {
+        guard let selectedElement = selectedElement else { return nil }
+        let rect = selectedElement.frame.cgRect
+
+        for edge in PrototypingResizeEdge.allCases {
+            let controlPoint = resizeHandlePoint(in: rect, edge: edge)
+            if distance(from: point, to: controlPoint) <= 18 {
+                return ResizeDrag(
+                    elementID: selectedElement.id,
+                    edge: edge,
+                    startFrame: selectedElement.frame,
+                    component: selectedElement.component
+                )
+            }
         }
 
         return nil
@@ -416,9 +539,61 @@ private struct PrototypingCanvasInteractionOverlay: View {
         return target
     }
 
+    private func resizedFrame(
+        from startFrame: PrototypingElementFrame,
+        edge: PrototypingResizeEdge,
+        translation: CGSize,
+        component: PrototypingComponent
+    ) -> PrototypingElementFrame {
+        let canvasSize = document.canvasSize.cgSize
+        let minimumSize = PrototypingDraftDocument.minimumSize(for: component)
+        let maximumSize = PrototypingDraftDocument.maximumSize(for: component, canvasSize: canvasSize)
+        let rect = startFrame.cgRect
+        var x = rect.minX
+        var y = rect.minY
+        var width = rect.width
+        var height = rect.height
+
+        switch edge {
+        case .left:
+            let fixedRight = rect.maxX
+            let maxWidth = min(maximumSize.width, fixedRight)
+            width = clamp(rect.width - translation.width, minimumSize.width, maxWidth)
+            x = fixedRight - width
+        case .right:
+            let maxWidth = min(maximumSize.width, canvasSize.width - rect.minX)
+            width = clamp(rect.width + translation.width, minimumSize.width, maxWidth)
+        case .top:
+            let fixedBottom = rect.maxY
+            let maxHeight = min(maximumSize.height, fixedBottom)
+            height = clamp(rect.height - translation.height, minimumSize.height, maxHeight)
+            y = fixedBottom - height
+        case .bottom:
+            let maxHeight = min(maximumSize.height, canvasSize.height - rect.minY)
+            height = clamp(rect.height + translation.height, minimumSize.height, maxHeight)
+        }
+
+        return PrototypingElementFrame(
+            x: Double(max(0, x)),
+            y: Double(max(0, y)),
+            width: Double(width),
+            height: Double(height)
+        )
+        .constrained(
+            inside: canvasSize,
+            minimumSize: minimumSize,
+            maximumSize: maximumSize
+        )
+    }
+
     private var selectedAnnotation: PrototypingCanvasElement? {
         guard let selectedElementID else { return nil }
         return document.elements.first { $0.id == selectedElementID && $0.component == .aiNote }
+    }
+
+    private var selectedElement: PrototypingCanvasElement? {
+        guard let selectedElementID else { return nil }
+        return document.elements.first { $0.id == selectedElementID }
     }
 
     private func hitElement(at point: CGPoint) -> PrototypingCanvasElement? {
@@ -442,6 +617,10 @@ private struct PrototypingCanvasInteractionOverlay: View {
 
     private func distance(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
         hypot(lhs.x - rhs.x, lhs.y - rhs.y)
+    }
+
+    private func clamp(_ value: CGFloat, _ minimum: CGFloat, _ maximum: CGFloat) -> CGFloat {
+        min(maximum, max(minimum, value))
     }
 }
 
@@ -607,7 +786,7 @@ private struct PrototypingElementView: View {
             case .arrow:
                 arrow(proxy.size)
             case .aiNote:
-                noteView
+                noteView(proxy.size)
             }
         }
     }
@@ -870,14 +1049,21 @@ private struct PrototypingElementView: View {
         .stroke(Color.blue.opacity(0.78), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
     }
 
-    private var noteView: some View {
-        Text(note.isEmpty ? "核心功能" : note)
-            .font(.system(size: 13, weight: .semibold))
+    private func noteView(_ size: CGSize) -> some View {
+        let fontSize = min(15, max(10, min(size.height * 0.34, size.width * 0.12)))
+        let lineHeight = max(15, fontSize + 5)
+        let lineLimit = max(1, min(5, Int(size.height / lineHeight)))
+        let horizontalPadding = min(14, max(8, size.width * 0.1))
+        let verticalPadding = min(9, max(6, size.height * 0.16))
+
+        return Text(note.isEmpty ? "核心功能" : note)
+            .font(.system(size: fontSize, weight: .semibold))
             .foregroundColor(.black.opacity(0.82))
-            .lineLimit(2)
-            .minimumScaleFactor(0.76)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .multilineTextAlignment(.center)
+            .lineLimit(lineLimit)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.yellow.opacity(0.86))
             .clipShape(RoundedRectangle(cornerRadius: 10))

@@ -115,7 +115,11 @@ public final class PrototypingDraftStore: ObservableObject {
     public func applyDevice(_ device: PrototypingDeviceKind) {
         guard currentDocument.kind != .webPage else { return }
         update { document in
-            document.activateBoard(kind: .appPage, device: device, orientation: document.orientation)
+            document.activateBoard(
+                kind: .appPage,
+                device: device,
+                orientation: document.preferredOrientation(for: device)
+            )
         }
     }
 
@@ -123,6 +127,13 @@ public final class PrototypingDraftStore: ObservableObject {
         guard currentDocument.kind != .webPage else { return }
         update { document in
             document.activateBoard(kind: .appPage, device: document.device, orientation: orientation)
+        }
+    }
+
+    public func updateNote(_ note: String) {
+        update { document in
+            document.note = note
+            document.resizeAnnotationElementsForCurrentNote()
         }
     }
 
@@ -135,7 +146,8 @@ public final class PrototypingDraftStore: ObservableObject {
                 copy.frame = snappedFrame(
                     copy.frame,
                     canvasSize: document.canvasSize.cgSize,
-                    gridSize: CGFloat(nextGridSize)
+                    gridSize: CGFloat(nextGridSize),
+                    component: element.component
                 )
                 return copy
             }
@@ -144,13 +156,21 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func addComponent(_ component: PrototypingComponent) {
         update { document in
-            let preferredFrame = PrototypingDraftDocument.defaultFrame(
+            let baseFrame = PrototypingDraftDocument.defaultFrame(
                 for: component,
                 canvasSize: document.canvasSize
             )
+            let preferredFrame = component == .aiNote
+                ? PrototypingDraftDocument.annotationFrame(
+                    for: document.note,
+                    existingFrame: baseFrame,
+                    canvasSize: document.canvasSize.cgSize
+                )
+                : baseFrame
             let frame = nextAvailableFrame(
                 preferredFrame: preferredFrame,
-                in: document
+                in: document,
+                component: component
             )
             document.elements.append(
                 PrototypingCanvasElement(
@@ -173,12 +193,14 @@ public final class PrototypingDraftStore: ObservableObject {
         currentDocument = document
     }
 
-    public func snappedFrame(id _: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
+    public func snappedFrame(id: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
         let canvasSize = currentDocument.canvasSize.cgSize
+        let component = currentDocument.elements.first { $0.id == id }?.component
         return snappedFrame(
             proposedFrame,
             canvasSize: canvasSize,
-            gridSize: CGFloat(currentDocument.gridSize)
+            gridSize: CGFloat(currentDocument.gridSize),
+            component: component
         )
     }
 
@@ -334,13 +356,30 @@ public final class PrototypingDraftStore: ObservableObject {
     private func snappedFrame(
         _ proposedFrame: PrototypingElementFrame,
         canvasSize: CGSize,
-        gridSize: CGFloat
+        gridSize: CGFloat,
+        component: PrototypingComponent? = nil
     ) -> PrototypingElementFrame {
         let unit = max(4, gridSize)
-        let width = min(canvasSize.width, max(unit * 2, snap(CGFloat(proposedFrame.width), unit: unit)))
-        let height = min(canvasSize.height, max(unit * 2, snap(CGFloat(proposedFrame.height), unit: unit)))
-        let x = min(max(0, snap(CGFloat(proposedFrame.x), unit: unit)), max(0, canvasSize.width - width))
-        let y = min(max(0, snap(CGFloat(proposedFrame.y), unit: unit)), max(0, canvasSize.height - height))
+        let minimumSize = component.map(PrototypingDraftDocument.minimumSize(for:))
+            ?? CGSize(width: unit * 2, height: unit * 2)
+        let maximumSize = component.map {
+            PrototypingDraftDocument.maximumSize(for: $0, canvasSize: canvasSize)
+        } ?? canvasSize
+        let constrained = proposedFrame.constrained(
+            inside: canvasSize,
+            minimumSize: minimumSize,
+            maximumSize: maximumSize
+        )
+        let width = min(
+            maximumSize.width,
+            max(minimumSize.width, snap(CGFloat(constrained.width), unit: unit))
+        )
+        let height = min(
+            maximumSize.height,
+            max(minimumSize.height, snap(CGFloat(constrained.height), unit: unit))
+        )
+        let x = min(max(0, snap(CGFloat(constrained.x), unit: unit)), max(0, canvasSize.width - width))
+        let y = min(max(0, snap(CGFloat(constrained.y), unit: unit)), max(0, canvasSize.height - height))
 
         return PrototypingElementFrame(
             x: Double(x),
@@ -352,14 +391,16 @@ public final class PrototypingDraftStore: ObservableObject {
 
     private func nextAvailableFrame(
         preferredFrame: PrototypingElementFrame,
-        in document: PrototypingDraftDocument
+        in document: PrototypingDraftDocument,
+        component: PrototypingComponent
     ) -> PrototypingElementFrame {
         let canvasSize = document.canvasSize.cgSize
         let unit = max(4, CGFloat(document.gridSize))
         let preferred = snappedFrame(
             preferredFrame,
             canvasSize: canvasSize,
-            gridSize: unit
+            gridSize: unit,
+            component: component
         )
 
         if hasRoom(for: preferred, in: document, padding: unit) {

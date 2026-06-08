@@ -47,8 +47,8 @@ public struct PrototypingKitView: View {
     @State private var activeLibrary: PrototypingLibrarySheet?
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
-    @AppStorage("PrototypingKit.showTemplateSection") private var isTemplateSectionVisible = false
-    @AppStorage("PrototypingKit.showGridSection") private var isGridSectionVisible = false
+    @AppStorage("PrototypingKit.showTemplateSection.v2") private var isTemplateSectionVisible = true
+    @AppStorage("PrototypingKit.showGridSection.v2") private var isGridSectionVisible = true
 
     @MainActor
     public init(
@@ -232,12 +232,8 @@ public struct PrototypingKitView: View {
                     .font(.headline)
                     .foregroundColor(PrototypingKitColors.ink)
                 Spacer()
-                Button(action: createDraft) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(PrototypingKitColors.accent)
-                }
                 Button(action: { isSidebarExpanded = false }) {
-                    Image(systemName: "sidebar.left")
+                    Image(systemName: "chevron.left")
                         .foregroundColor(PrototypingKitColors.secondaryInk)
                 }
             }
@@ -541,9 +537,7 @@ public struct PrototypingKitView: View {
         Binding(
             get: { store.currentDocument.note },
             set: { value in
-                store.update { document in
-                    document.note = value
-                }
+                store.updateNote(value)
             }
         )
     }
