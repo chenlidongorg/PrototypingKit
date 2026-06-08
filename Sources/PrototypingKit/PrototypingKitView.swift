@@ -213,34 +213,42 @@ public struct PrototypingKitView: View {
         let canvasSize = store.currentDocument.canvasSize.cgSize
         let fitScale = stageFitScale(availableSize: availableSize)
         let scale = stageZoomMode == "fit" ? fitScale : clampStageZoom(CGFloat(manualStageZoom))
+        let contentSize = stageContentSize(
+            availableSize: availableSize,
+            canvasSize: canvasSize,
+            scale: scale
+        )
 
         return ZStack(alignment: .topTrailing) {
             ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                PrototypingEditableDraftCanvas(
-                    document: store.currentDocument,
-                    selectedElementIDs: selectedElementIDs,
-                    isMultiSelectionEnabled: isMultiSelectionEnabled,
-                    onSelect: selectElement,
-                    onToggleSelection: toggleElementSelection,
-                    onDeselect: deselectElement,
-                    onMove: { id, frame, persist in
-                        let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
-                        store.moveElement(id: id, to: snappedFrame, persist: persist)
-                    },
-                    onMoveElements: { framesByID, persist in
-                        store.moveElements(framesByID, persist: persist)
-                    },
-                    onUpdateAnnotationArrow: { id, anchor, target, persist in
-                        store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
-                    },
-                    onDelete: deleteElement
-                )
-                .frame(width: canvasSize.width, height: canvasSize.height)
-                .scaleEffect(scale, anchor: .topLeading)
-                .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
-                .padding(28)
+                ZStack {
+                    PrototypingEditableDraftCanvas(
+                        document: store.currentDocument,
+                        selectedElementIDs: selectedElementIDs,
+                        isMultiSelectionEnabled: isMultiSelectionEnabled,
+                        onSelect: selectElement,
+                        onToggleSelection: toggleElementSelection,
+                        onDeselect: deselectElement,
+                        onMove: { id, frame, persist in
+                            let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
+                            store.moveElement(id: id, to: snappedFrame, persist: persist)
+                        },
+                        onMoveElements: { framesByID, persist in
+                            store.moveElements(framesByID, persist: persist)
+                        },
+                        onUpdateAnnotationArrow: { id, anchor, target, persist in
+                            store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
+                        },
+                        onDelete: deleteElement
+                    )
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                }
+                .frame(width: contentSize.width, height: contentSize.height)
             }
             .background(PrototypingKitColors.canvasSurface)
+            .id(stageScrollResetID(scale: scale, canvasSize: canvasSize, availableSize: availableSize))
 
             stageZoomControls(scale: scale)
                 .padding(.top, 14)
@@ -252,16 +260,6 @@ public struct PrototypingKitView: View {
     private func stageZoomControls(scale: CGFloat) -> some View {
         HStack(spacing: 6) {
             Button(action: {
-                stageZoomMode = "fit"
-            }) {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 30, height: 30)
-            }
-            .foregroundColor(stageZoomMode == "fit" ? PrototypingKitColors.accent : PrototypingKitColors.ink)
-            .buttonStyle(PlainButtonStyle())
-
-            Button(action: {
                 setManualStageZoom(scale - 0.1)
             }) {
                 Image(systemName: "minus.magnifyingglass")
@@ -270,10 +268,17 @@ public struct PrototypingKitView: View {
             }
             .buttonStyle(PlainButtonStyle())
 
-            Text("\(Int((scale * 100).rounded()))%")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(PrototypingKitColors.secondaryInk)
-                .frame(width: 46)
+            Button(action: {
+                stageZoomMode = "fit"
+            }) {
+                Text("\(Int((scale * 100).rounded()))%")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(stageZoomMode == "fit" ? PrototypingKitColors.accent : PrototypingKitColors.secondaryInk)
+                    .frame(width: 46, height: 30)
+                    .background(stageZoomMode == "fit" ? PrototypingKitColors.accent.opacity(0.10) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(PlainButtonStyle())
 
             Button(action: {
                 setManualStageZoom(scale + 0.1)
@@ -300,10 +305,38 @@ public struct PrototypingKitView: View {
         let canvasSize = store.currentDocument.canvasSize.cgSize
         guard canvasSize.width > 0, canvasSize.height > 0 else { return 1 }
 
-        let availableWidth = max(120, availableSize.width - 84)
-        let availableHeight = max(120, availableSize.height - 84)
+        let margin = stageMargin
+        let availableWidth = max(120, availableSize.width - margin * 2)
+        let availableHeight = max(120, availableSize.height - margin * 2)
         let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height)
         return clampStageZoom(scale)
+    }
+
+    private func stageContentSize(
+        availableSize: CGSize,
+        canvasSize: CGSize,
+        scale: CGFloat
+    ) -> CGSize {
+        let width = max(availableSize.width, canvasSize.width * scale + stageMargin * 2)
+        let height = max(availableSize.height, canvasSize.height * scale + stageMargin * 2)
+        return CGSize(width: width, height: height)
+    }
+
+    private func stageScrollResetID(
+        scale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) -> String {
+        [
+            store.currentDocument.activeBoardID,
+            "\(Int(canvasSize.width))x\(Int(canvasSize.height))",
+            "\(Int((scale * 100).rounded()))",
+            "\(Int(availableSize.width))x\(Int(availableSize.height))"
+        ].joined(separator: "-")
+    }
+
+    private var stageMargin: CGFloat {
+        44
     }
 
     private func setManualStageZoom(_ scale: CGFloat) {
