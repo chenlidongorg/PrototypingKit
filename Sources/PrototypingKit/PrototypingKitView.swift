@@ -221,7 +221,7 @@ public struct PrototypingKitView: View {
         )
         let centerResetID = stageCenterResetID(scale: scale, canvasSize: canvasSize, availableSize: availableSize)
 
-        return ZStack(alignment: .topTrailing) {
+        return ZStack(alignment: .bottom) {
             ScrollViewReader { scrollProxy in
                 ScrollView([.vertical, .horizontal], showsIndicators: true) {
                     ZStack {
@@ -264,8 +264,7 @@ public struct PrototypingKitView: View {
             }
 
             stageZoomControls(scale: scale)
-                .padding(.top, 14)
-                .padding(.trailing, 14)
+                .padding(.bottom, 18)
         }
         .frame(width: availableSize.width, height: availableSize.height)
     }
