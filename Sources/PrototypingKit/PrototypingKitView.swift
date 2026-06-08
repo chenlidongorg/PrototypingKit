@@ -102,10 +102,12 @@ public struct PrototypingKitView: View {
                     PrototypingEditableDraftCanvas(
                         document: store.currentDocument,
                         selectedElementID: selectedElementID,
-                        onSelect: { selectedElementID = $0 },
+                        onSelect: selectElement,
                         onMove: { id, frame, persist in
-                            store.moveElement(id: id, to: frame, persist: persist)
-                        }
+                            let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
+                            store.moveElement(id: id, to: snappedFrame, persist: persist)
+                        },
+                        onDelete: deleteElement
                     )
                         .frame(
                             width: store.currentDocument.canvasSize.cgSize.width,
@@ -264,6 +266,11 @@ public struct PrototypingKitView: View {
         return store.currentDocument.elements.first { $0.id == selectedElementID }
     }
 
+    private func selectElement(_ id: String) {
+        selectedElementID = id
+        store.bringElementToFront(id: id)
+    }
+
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 14, weight: .semibold))
@@ -290,7 +297,11 @@ public struct PrototypingKitView: View {
 
     private func deleteSelectedElement() {
         guard let selectedElementID else { return }
-        store.deleteElement(id: selectedElementID)
+        deleteElement(selectedElementID)
+    }
+
+    private func deleteElement(_ id: String) {
+        store.deleteElement(id: id)
         self.selectedElementID = nil
     }
 }

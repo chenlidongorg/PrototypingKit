@@ -135,6 +135,46 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
+    public func bringElementToFront(id: String) {
+        guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }) else { return }
+        var document = currentDocument
+        let element = document.elements.remove(at: index)
+        document.elements.append(element)
+        currentDocument = document
+    }
+
+    public func snappedFrame(id: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
+        let canvasSize = currentDocument.canvasSize.cgSize
+        let proposedRect = proposedFrame.cgRect
+        let otherRects = currentDocument.elements
+            .filter { $0.id != id }
+            .map { $0.frame.cgRect }
+
+        var xGuides: [CGFloat] = [0, canvasSize.width / 2, canvasSize.width]
+        var yGuides: [CGFloat] = [0, canvasSize.height / 2, canvasSize.height]
+        for rect in otherRects {
+            xGuides.append(contentsOf: [rect.minX, rect.midX, rect.maxX])
+            yGuides.append(contentsOf: [rect.minY, rect.midY, rect.maxY])
+        }
+
+        let dx = nearestSnapOffset(
+            anchors: [proposedRect.minX, proposedRect.midX, proposedRect.maxX],
+            guides: xGuides
+        )
+        let dy = nearestSnapOffset(
+            anchors: [proposedRect.minY, proposedRect.midY, proposedRect.maxY],
+            guides: yGuides
+        )
+
+        return PrototypingElementFrame(
+            x: proposedFrame.x + Double(dx),
+            y: proposedFrame.y + Double(dy),
+            width: proposedFrame.width,
+            height: proposedFrame.height
+        )
+        .moved(by: .zero, inside: canvasSize)
+    }
+
     public func moveElement(id: String, to frame: PrototypingElementFrame, persist: Bool) {
         guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }) else { return }
         var document = currentDocument
@@ -242,6 +282,25 @@ public final class PrototypingDraftStore: ObservableObject {
             result.append(element.component)
         }
         return result
+    }
+
+    private func nearestSnapOffset(anchors: [CGFloat], guides: [CGFloat]) -> CGFloat {
+        let threshold: CGFloat = 8
+        var bestOffset: CGFloat = 0
+        var bestDistance = threshold
+
+        for anchor in anchors {
+            for guide in guides {
+                let offset = guide - anchor
+                let distance = abs(offset)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestOffset = offset
+                }
+            }
+        }
+
+        return bestOffset
     }
 
     private func writeThumbnail(for document: PrototypingDraftDocument) {

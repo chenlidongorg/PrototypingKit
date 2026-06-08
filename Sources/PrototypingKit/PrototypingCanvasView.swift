@@ -26,7 +26,8 @@ struct PrototypingDraftCanvas: View {
                     document: document,
                     selectedElementID: nil,
                     onSelect: nil,
-                    onMove: nil
+                    onMove: nil,
+                    onDelete: nil
                 )
             }
         }
@@ -38,6 +39,7 @@ struct PrototypingEditableDraftCanvas: View {
     let selectedElementID: String?
     let onSelect: (String) -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onDelete: (String) -> Void
 
     var body: some View {
         canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
@@ -45,7 +47,8 @@ struct PrototypingEditableDraftCanvas: View {
                 document: document,
                 selectedElementID: selectedElementID,
                 onSelect: onSelect,
-                onMove: onMove
+                onMove: onMove,
+                onDelete: onDelete
             )
         }
     }
@@ -72,6 +75,7 @@ private struct PrototypingCanvasElementsLayer: View {
     let selectedElementID: String?
     let onSelect: ((String) -> Void)?
     let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
+    let onDelete: ((String) -> Void)?
 
     var body: some View {
         GeometryReader { _ in
@@ -83,7 +87,8 @@ private struct PrototypingCanvasElementsLayer: View {
                         note: document.note,
                         isSelected: element.id == selectedElementID,
                         onSelect: onSelect,
-                        onMove: onMove
+                        onMove: onMove,
+                        onDelete: onDelete
                     )
                 }
             }
@@ -98,6 +103,7 @@ private struct PrototypingElementContainer: View {
     let isSelected: Bool
     let onSelect: ((String) -> Void)?
     let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
+    let onDelete: ((String) -> Void)?
 
     @State private var dragStartFrame: PrototypingElementFrame?
 
@@ -112,9 +118,18 @@ private struct PrototypingElementContainer: View {
             )
             .position(x: rect.midX, y: rect.midY)
             .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect?(element.id)
-            }
+            .highPriorityGesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        onDelete?(element.id)
+                    }
+            )
+            .simultaneousGesture(
+                TapGesture(count: 1)
+                    .onEnded {
+                        onSelect?(element.id)
+                    }
+            )
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
