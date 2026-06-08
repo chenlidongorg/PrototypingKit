@@ -103,41 +103,52 @@ public struct PrototypingKitView: View {
 
     private var content: some View {
         GeometryReader { proxy in
-            HStack(spacing: 0) {
-                if isSidebarExpanded {
-                    sidebar
-                        .frame(width: min(max(proxy.size.width * 0.22, 210), 280))
-                } else {
-                    collapsedSidebar
-                        .frame(width: 54)
-                }
-
-                Divider()
-
-                ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                    PrototypingEditableDraftCanvas(
-                        document: store.currentDocument,
-                        selectedElementID: selectedElementID,
-                        onSelect: selectElement,
-                        onDeselect: deselectElement,
-                        onMove: { id, frame, persist in
-                            let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
-                            store.moveElement(id: id, to: snappedFrame, persist: persist)
-                        },
-                        onDelete: deleteElement
-                    )
-                        .frame(
-                            width: store.currentDocument.canvasSize.cgSize.width,
-                            height: store.currentDocument.canvasSize.cgSize.height
+            ZStack(alignment: .topLeading) {
+                HStack(spacing: 0) {
+                    ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                        PrototypingEditableDraftCanvas(
+                            document: store.currentDocument,
+                            selectedElementID: selectedElementID,
+                            onSelect: selectElement,
+                            onDeselect: deselectElement,
+                            onMove: { id, frame, persist in
+                                let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
+                                store.moveElement(id: id, to: snappedFrame, persist: persist)
+                            },
+                            onDelete: deleteElement
                         )
-                        .padding(28)
+                            .frame(
+                                width: store.currentDocument.canvasSize.cgSize.width,
+                                height: store.currentDocument.canvasSize.cgSize.height
+                            )
+                            .padding(28)
+                    }
+                    .background(PrototypingKitColors.canvasSurface)
+
+                    Divider()
+
+                    inspector
+                        .frame(width: min(max(proxy.size.width * 0.25, 250), 330))
                 }
-                .background(PrototypingKitColors.canvasSurface)
 
-                Divider()
+                if isSidebarExpanded {
+                    Color.black.opacity(0.08)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            isSidebarExpanded = false
+                        }
 
-                inspector
-                    .frame(width: min(max(proxy.size.width * 0.25, 250), 330))
+                    sidebar
+                        .frame(width: min(max(proxy.size.width * 0.24, 230), 300))
+                        .frame(maxHeight: .infinity)
+                        .background(PrototypingKitColors.panel)
+                        .shadow(color: Color.black.opacity(0.16), radius: 18, x: 10, y: 0)
+                        .transition(.move(edge: .leading))
+                } else {
+                    sidebarLauncher
+                        .padding(.leading, 14)
+                        .padding(.top, 14)
+                }
             }
         }
     }
@@ -179,27 +190,26 @@ public struct PrototypingKitView: View {
         .padding(16)
     }
 
-    private var collapsedSidebar: some View {
-        VStack(spacing: 12) {
-            Button(action: { isSidebarExpanded = true }) {
+    private var sidebarLauncher: some View {
+        Button(action: { isSidebarExpanded = true }) {
+            HStack(spacing: 6) {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(PrototypingKitColors.accent)
-                    .frame(width: 38, height: 38)
-                    .background(PrototypingKitColors.controlSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .font(.system(size: 15, weight: .semibold))
+                Text("\(store.records.count)")
+                    .font(.system(size: 11, weight: .semibold))
             }
-            .buttonStyle(PlainButtonStyle())
-
-            Text("\(store.records.count)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(PrototypingKitColors.secondaryInk)
-
-            Spacer(minLength: 0)
+            .foregroundColor(PrototypingKitColors.accent)
+            .padding(.horizontal, 10)
+            .frame(height: 38)
+            .background(PrototypingKitColors.panel.opacity(0.96))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(PrototypingKitColors.separator, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
-        .padding(.vertical, 14)
-        .frame(maxHeight: .infinity)
-        .background(PrototypingKitColors.panel)
+        .buttonStyle(PlainButtonStyle())
     }
 
     private var inspector: some View {
