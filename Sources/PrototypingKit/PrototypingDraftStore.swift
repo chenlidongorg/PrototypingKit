@@ -72,9 +72,11 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func applyTemplate(_ template: PrototypingTemplate) {
         update { document in
+            let device = template.preferredDevice ?? (document.kind == .webPage ? .phone : document.device)
             document.template = template
             document.kind = template.kind
-            document.canvasSize = template.kind == .webPage ? .web : .phone
+            document.device = device
+            document.canvasSize = template.kind == .webPage ? .web : device.canvasSize
             document.elements = PrototypingDraftDocument.defaultElements(
                 for: template,
                 canvasSize: document.canvasSize
@@ -86,9 +88,11 @@ public final class PrototypingDraftStore: ObservableObject {
     public func applyKind(_ kind: PrototypingDraftKind) {
         update { document in
             let template: PrototypingTemplate = kind == .webPage ? .webHome : .blankPhone
+            let device: PrototypingDeviceKind = kind == .webPage ? document.device : (document.kind == .webPage ? .phone : document.device)
             document.kind = kind
             document.template = template
-            document.canvasSize = kind == .webPage ? .web : .phone
+            document.device = device
+            document.canvasSize = kind == .webPage ? .web : device.canvasSize
             document.elements = PrototypingDraftDocument.defaultElements(
                 for: template,
                 canvasSize: document.canvasSize
@@ -116,6 +120,41 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
+    public func applyDevice(_ device: PrototypingDeviceKind) {
+        guard currentDocument.kind != .webPage else { return }
+        update { document in
+            let oldSize = document.canvasSize.cgSize
+            let newSize = device.canvasSize.cgSize
+            document.device = device
+            document.canvasSize = device.canvasSize
+            document.elements = document.elements.map { element in
+                var copy = element
+                copy.frame = snappedFrame(
+                    scaledFrame(copy.frame, from: oldSize, to: newSize),
+                    canvasSize: newSize,
+                    gridSize: CGFloat(document.gridSize)
+                )
+                return copy
+            }
+        }
+    }
+
+    public func updateGridSize(_ gridSize: Double) {
+        update { document in
+            let nextGridSize = max(8, min(32, gridSize))
+            document.gridSize = nextGridSize
+            document.elements = document.elements.map { element in
+                var copy = element
+                copy.frame = snappedFrame(
+                    copy.frame,
+                    canvasSize: document.canvasSize.cgSize,
+                    gridSize: CGFloat(nextGridSize)
+                )
+                return copy
+            }
+        }
+    }
+
     public func addComponent(_ component: PrototypingComponent) {
         update { document in
             let frame = PrototypingDraftDocument.defaultFrame(
@@ -126,7 +165,11 @@ public final class PrototypingDraftStore: ObservableObject {
                 PrototypingCanvasElement(
                     component: component,
                     title: component.title,
-                    frame: frame
+                    frame: snappedFrame(
+                        frame,
+                        canvasSize: document.canvasSize.cgSize,
+                        gridSize: CGFloat(document.gridSize)
+                    )
                 )
             )
             if !document.enabledComponents.contains(component) {
@@ -145,15 +188,11 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func snappedFrame(id _: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
         let canvasSize = currentDocument.canvasSize.cgSize
-        let snapUnit: CGFloat = 4
-
-        return PrototypingElementFrame(
-            x: Double(snap(CGFloat(proposedFrame.x), unit: snapUnit)),
-            y: Double(snap(CGFloat(proposedFrame.y), unit: snapUnit)),
-            width: proposedFrame.width,
-            height: proposedFrame.height
+        return snappedFrame(
+            proposedFrame,
+            canvasSize: canvasSize,
+            gridSize: CGFloat(currentDocument.gridSize)
         )
-        .moved(by: .zero, inside: canvasSize)
     }
 
     public func moveElement(id: String, to frame: PrototypingElementFrame, persist: Bool) {
@@ -263,6 +302,41 @@ public final class PrototypingDraftStore: ObservableObject {
             result.append(element.component)
         }
         return result
+    }
+
+    private func snappedFrame(
+        _ proposedFrame: PrototypingElementFrame,
+        canvasSize: CGSize,
+        gridSize: CGFloat
+    ) -> PrototypingElementFrame {
+        let unit = max(4, gridSize)
+        let width = min(canvasSize.width, max(unit * 2, snap(CGFloat(proposedFrame.width), unit: unit)))
+        let height = min(canvasSize.height, max(unit * 2, snap(CGFloat(proposedFrame.height), unit: unit)))
+        let x = min(max(0, snap(CGFloat(proposedFrame.x), unit: unit)), max(0, canvasSize.width - width))
+        let y = min(max(0, snap(CGFloat(proposedFrame.y), unit: unit)), max(0, canvasSize.height - height))
+
+        return PrototypingElementFrame(
+            x: Double(x),
+            y: Double(y),
+            width: Double(width),
+            height: Double(height)
+        )
+    }
+
+    private func scaledFrame(
+        _ frame: PrototypingElementFrame,
+        from oldSize: CGSize,
+        to newSize: CGSize
+    ) -> PrototypingElementFrame {
+        guard oldSize.width > 0, oldSize.height > 0 else { return frame }
+        let scaleX = newSize.width / oldSize.width
+        let scaleY = newSize.height / oldSize.height
+        return PrototypingElementFrame(
+            x: frame.x * Double(scaleX),
+            y: frame.y * Double(scaleY),
+            width: frame.width * Double(scaleX),
+            height: frame.height * Double(scaleY)
+        )
     }
 
     private func snap(_ value: CGFloat, unit: CGFloat) -> CGFloat {

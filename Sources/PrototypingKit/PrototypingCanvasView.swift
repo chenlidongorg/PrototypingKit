@@ -15,7 +15,7 @@ struct PrototypingDraftCanvas: View {
     let document: PrototypingDraftDocument
 
     var body: some View {
-        canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
+        canvasShell(document: document) {
             if document.elements.isEmpty {
                 if document.kind == .webPage {
                     WebWireframe(document: document)
@@ -41,7 +41,7 @@ struct PrototypingEditableDraftCanvas: View {
     let onDelete: (String) -> Void
 
     var body: some View {
-        canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
+        canvasShell(document: document) {
             PrototypingCanvasElementsLayer(
                 document: document,
                 selectedElementID: selectedElementID
@@ -58,12 +58,14 @@ struct PrototypingEditableDraftCanvas: View {
 }
 
 private func canvasShell<Content: View>(
-    cornerRadius: CGFloat,
+    document: PrototypingDraftDocument,
     @ViewBuilder content: () -> Content
 ) -> some View {
-    ZStack {
+    let cornerRadius = canvasCornerRadius(for: document)
+
+    return ZStack {
         Color.white
-        GridBackground()
+        GridBackground(spacing: CGFloat(document.gridSize))
         content()
     }
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -71,6 +73,11 @@ private func canvasShell<Content: View>(
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .stroke(Color.black.opacity(0.16), lineWidth: 2)
     )
+}
+
+private func canvasCornerRadius(for document: PrototypingDraftDocument) -> CGFloat {
+    if document.kind == .webPage { return 12 }
+    return document.device == .tablet ? 24 : 30
 }
 
 private struct PrototypingCanvasElementsLayer: View {
@@ -105,11 +112,39 @@ private struct PrototypingElementContainer: View {
 
         PrototypingElementView(element: element, note: note)
             .frame(width: rect.width, height: rect.height)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue.opacity(0.82) : Color.clear, lineWidth: 2)
-            )
+            .overlay(SelectionChrome(isSelected: isSelected))
             .position(x: rect.midX, y: rect.midY)
+    }
+}
+
+private struct SelectionChrome: View {
+    let isSelected: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            if isSelected {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.blue.opacity(0.92), lineWidth: 2.5)
+                    .background(Color.blue.opacity(0.035))
+
+                ForEach(Array(cornerPoints(in: proxy.size).enumerated()), id: \.offset) { _, point in
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(Circle().stroke(Color.blue.opacity(0.92), lineWidth: 2))
+                        .frame(width: 9, height: 9)
+                        .position(point)
+                }
+            }
+        }
+    }
+
+    private func cornerPoints(in size: CGSize) -> [CGPoint] {
+        [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: size.width, y: 0),
+            CGPoint(x: 0, y: size.height),
+            CGPoint(x: size.width, y: size.height)
+        ]
     }
 }
 
@@ -305,6 +340,8 @@ private struct PrototypingElementView: View {
             switch element.component {
             case .title:
                 title(proxy.size)
+            case .subtitle:
+                subtitle(proxy.size)
             case .button:
                 button(proxy.size)
             case .input:
@@ -319,6 +356,26 @@ private struct PrototypingElementView: View {
                 imagePlaceholder(proxy.size)
             case .bottomNavigation:
                 bottomNavigation(proxy.size)
+            case .topNavigation:
+                topNavigation(proxy.size)
+            case .segmentedControl:
+                segmentedControl(proxy.size)
+            case .avatar:
+                avatar(proxy.size)
+            case .tag:
+                tag(proxy.size)
+            case .toggle:
+                toggle(proxy.size)
+            case .checkbox:
+                checkbox(proxy.size)
+            case .progress:
+                progress(proxy.size)
+            case .chart:
+                chart(proxy.size)
+            case .table:
+                table(proxy.size)
+            case .sidebar:
+                sidebar(proxy.size)
             case .dialog:
                 dialog(proxy.size)
             case .arrow:
@@ -337,6 +394,14 @@ private struct PrototypingElementView: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color.black.opacity(0.18))
                 .frame(width: size.width * 0.82, height: max(5, size.height * 0.2))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func subtitle(_ size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: max(4, size.height * 0.18)) {
+            line(width: size.width * 0.92, height: max(6, size.height * 0.28), opacity: 0.14)
+            line(width: size.width * 0.64, height: max(6, size.height * 0.26), opacity: 0.12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
@@ -427,6 +492,135 @@ private struct PrototypingElementView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.12), lineWidth: 1))
     }
 
+    private func topNavigation(_ size: CGSize) -> some View {
+        HStack(spacing: 12) {
+            line(width: min(88, size.width * 0.28), height: max(8, size.height * 0.18), opacity: 0.28)
+            Spacer(minLength: 0)
+            ForEach(0..<3, id: \.self) { index in
+                line(width: min(52, size.width * 0.16), height: max(7, size.height * 0.14), opacity: index == 0 ? 0.22 : 0.12)
+            }
+        }
+        .padding(.horizontal, 14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.12), lineWidth: 1.2))
+    }
+
+    private func segmentedControl(_ size: CGSize) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(index == 0 ? Color.blue.opacity(0.22) : Color.gray.opacity(0.10))
+                    .overlay(line(width: size.width * 0.16, height: 6, opacity: index == 0 ? 0.28 : 0.12))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(4)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.black.opacity(0.12), lineWidth: 1.2))
+    }
+
+    private func avatar(_ size: CGSize) -> some View {
+        Circle()
+            .stroke(Color.black.opacity(0.18), lineWidth: 2)
+            .overlay(
+                Image(systemName: "person.fill")
+                    .font(.system(size: min(size.width, size.height) * 0.42))
+                    .foregroundColor(.gray.opacity(0.72))
+            )
+    }
+
+    private func tag(_ size: CGSize) -> some View {
+        Capsule()
+            .fill(Color.blue.opacity(0.14))
+            .overlay(line(width: size.width * 0.48, height: max(5, size.height * 0.18), opacity: 0.24))
+    }
+
+    private func toggle(_ size: CGSize) -> some View {
+        Capsule()
+            .fill(Color.blue.opacity(0.20))
+            .overlay(
+                Circle()
+                    .fill(Color.blue.opacity(0.72))
+                    .frame(width: min(size.height * 0.74, size.width * 0.44), height: min(size.height * 0.74, size.width * 0.44))
+                    .padding(.trailing, 4),
+                alignment: .trailing
+            )
+    }
+
+    private func checkbox(_ size: CGSize) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(Color.blue.opacity(0.68), lineWidth: 2)
+                .frame(width: min(24, size.height * 0.72), height: min(24, size.height * 0.72))
+                .overlay(Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundColor(.blue))
+            line(width: size.width * 0.52, height: 7, opacity: 0.18)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func progress(_ size: CGSize) -> some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(Color.gray.opacity(0.14))
+                .overlay(
+                    Capsule()
+                        .fill(Color.blue.opacity(0.62))
+                        .frame(width: proxy.size.width * 0.56),
+                    alignment: .leading
+                )
+        }
+    }
+
+    private func chart(_ size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            line(width: size.width * 0.38, height: 9, opacity: 0.24)
+            HStack(alignment: .bottom, spacing: max(8, size.width * 0.04)) {
+                ForEach([0.42, 0.72, 0.50, 0.86, 0.62], id: \.self) { value in
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.blue.opacity(0.18 + value * 0.18))
+                        .frame(height: max(20, size.height * value * 0.58))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(16)
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.13), lineWidth: 1.4))
+    }
+
+    private func table(_ size: CGSize) -> some View {
+        VStack(spacing: 0) {
+            ForEach(0..<5, id: \.self) { rowIndex in
+                HStack(spacing: 12) {
+                    line(width: size.width * 0.22, height: 7, opacity: rowIndex == 0 ? 0.24 : 0.14)
+                    line(width: size.width * 0.18, height: 7, opacity: rowIndex == 0 ? 0.24 : 0.12)
+                    line(width: size.width * 0.24, height: 7, opacity: rowIndex == 0 ? 0.24 : 0.12)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14)
+                .frame(maxHeight: .infinity)
+                .background(rowIndex == 0 ? Color.gray.opacity(0.10) : Color.clear)
+                if rowIndex < 4 {
+                    Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                }
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.12), lineWidth: 1.2))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func sidebar(_ size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            line(width: size.width * 0.62, height: 9, opacity: 0.24)
+            ForEach(0..<6, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(index == 0 ? Color.blue.opacity(0.18) : Color.black.opacity(0.08))
+                    .frame(height: max(20, min(30, size.height * 0.065)))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color.gray.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
     private func dialog(_ size: CGSize) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             line(width: size.width * 0.48, height: 8, opacity: 0.28)
@@ -472,25 +666,55 @@ private struct PrototypingElementView: View {
 }
 
 private struct GridBackground: View {
+    let spacing: CGFloat
+
     var body: some View {
         GeometryReader { proxy in
-            Path { path in
-                let spacing: CGFloat = 24
-                var x: CGFloat = 0
-                while x <= proxy.size.width {
-                    path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: proxy.size.height))
-                    x += spacing
-                }
+            let resolvedSpacing = max(8, spacing)
 
-                var y: CGFloat = 0
-                while y <= proxy.size.height {
-                    path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                    y += spacing
+            ZStack {
+                Path { path in
+                    var x: CGFloat = 0
+                    while x <= proxy.size.width {
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: proxy.size.height))
+                        x += resolvedSpacing
+                    }
+
+                    var y: CGFloat = 0
+                    while y <= proxy.size.height {
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: proxy.size.width, y: y))
+                        y += resolvedSpacing
+                    }
                 }
+                .stroke(Color.gray.opacity(0.13), lineWidth: 0.8)
+
+                Path { path in
+                    var x: CGFloat = 0
+                    var xIndex = 0
+                    while x <= proxy.size.width {
+                        if xIndex % 4 == 0 {
+                            path.move(to: CGPoint(x: x, y: 0))
+                            path.addLine(to: CGPoint(x: x, y: proxy.size.height))
+                        }
+                        x += resolvedSpacing
+                        xIndex += 1
+                    }
+
+                    var y: CGFloat = 0
+                    var yIndex = 0
+                    while y <= proxy.size.height {
+                        if yIndex % 4 == 0 {
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: proxy.size.width, y: y))
+                        }
+                        y += resolvedSpacing
+                        yIndex += 1
+                    }
+                }
+                .stroke(Color.gray.opacity(0.24), lineWidth: 1)
             }
-            .stroke(Color.gray.opacity(0.16), lineWidth: 1)
         }
     }
 }
@@ -513,7 +737,7 @@ private struct PhoneWireframe: View {
                 chat
             case .detail:
                 detail
-            case .list, .blankPhone, .webHome, .dashboard:
+            case .list, .blankPhone, .blankTablet, .onboarding, .profile, .settings, .checkout, .tabletDashboard, .webHome, .dashboard, .landing, .pricing:
                 list
             }
 
