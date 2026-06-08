@@ -138,10 +138,10 @@ private func annotationText(for element: PrototypingCanvasElement, fallback note
     let fallbackText = note.trimmingCharacters(in: .whitespacesAndNewlines)
 
     if !title.isEmpty && title != PrototypingComponent.aiNote.title {
-        return title
+        return PrototypingDraftDocument.annotationTextOrDefault(title)
     }
 
-    return fallbackText.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : fallbackText
+    return PrototypingDraftDocument.annotationTextOrDefault(fallbackText)
 }
 
 private struct PrototypingCanvasElementsLayer: View {
@@ -1606,7 +1606,7 @@ private struct PhoneWireframe: View {
     }
 
     private var note: some View {
-        Text(document.note.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : document.note)
+        Text(PrototypingDraftDocument.annotationTextOrDefault(document.note))
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(.black.opacity(0.82))
             .padding(.horizontal, 12)
@@ -1645,7 +1645,7 @@ private struct WebWireframe: View {
         .overlay(
             Group {
                 if document.enabledComponents.contains(.aiNote) {
-                    Text(document.note.isEmpty ? PrototypingDraftDocument.defaultAnnotationText : document.note)
+                    Text(PrototypingDraftDocument.annotationTextOrDefault(document.note))
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

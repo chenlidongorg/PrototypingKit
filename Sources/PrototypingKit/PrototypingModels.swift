@@ -436,6 +436,15 @@ public struct PrototypingDraftBoard: Codable, Identifiable, Hashable {
 
 public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public static let defaultAnnotationText = "注释文字"
+    private static let legacyDefaultAnnotationText = "核心功能"
+
+    public static func annotationTextOrDefault(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == legacyDefaultAnnotationText {
+            return defaultAnnotationText
+        }
+        return text
+    }
 
     public var id: String
     public var title: String
@@ -539,7 +548,9 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             ?? (canvasSize.width > canvasSize.height ? .landscape : .portrait)
         gridSize = try container.decodeIfPresent(Double.self, forKey: .gridSize) ?? 12
         enabledComponents = try container.decodeIfPresent([PrototypingComponent].self, forKey: .enabledComponents) ?? []
-        note = try container.decodeIfPresent(String.self, forKey: .note) ?? Self.defaultAnnotationText
+        note = Self.annotationTextOrDefault(
+            try container.decodeIfPresent(String.self, forKey: .note) ?? Self.defaultAnnotationText
+        )
         elements = try container.decodeIfPresent([PrototypingCanvasElement].self, forKey: .elements)
             ?? PrototypingDraftDocument.defaultElements(for: template, canvasSize: canvasSize)
         activeBoardID = try container.decodeIfPresent(String.self, forKey: .activeBoardID)
@@ -695,7 +706,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             var copy = element
             let trimmedTitle = element.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let annotationText = trimmedTitle.isEmpty || trimmedTitle == PrototypingComponent.aiNote.title
-                ? note
+                ? Self.annotationTextOrDefault(note)
                 : trimmedTitle
             copy.frame = PrototypingDraftDocument.annotationFrame(
                 for: annotationText,
@@ -1143,7 +1154,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         canvasSize: CGSize
     ) -> CGSize {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedText = text.isEmpty ? Self.defaultAnnotationText : text
+        let resolvedText = Self.annotationTextOrDefault(text)
         let minimum = minimumSize(for: .aiNote)
         let maximum = maximumSize(for: .aiNote, canvasSize: canvasSize)
         let font = UIFont.systemFont(ofSize: 14, weight: .semibold)
@@ -1179,7 +1190,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     ) -> PrototypingCanvasElement {
         PrototypingCanvasElement(
             component: component,
-            title: component.title,
+            title: component == .aiNote ? Self.defaultAnnotationText : component.title,
             frame: PrototypingElementFrame(x: x, y: y, width: width, height: height)
         )
     }

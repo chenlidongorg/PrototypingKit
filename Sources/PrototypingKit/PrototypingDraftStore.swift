@@ -143,9 +143,7 @@ public final class PrototypingDraftStore: ObservableObject {
         else { return }
 
         var document = currentDocument
-        let resolvedText = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? PrototypingDraftDocument.defaultAnnotationText
-            : text
+        let resolvedText = PrototypingDraftDocument.annotationTextOrDefault(text)
         document.note = resolvedText
         document.elements[index].title = resolvedText
         document.elements[index].frame = PrototypingDraftDocument.annotationFrame(
@@ -190,7 +188,7 @@ public final class PrototypingDraftStore: ObservableObject {
             )
             let preferredFrame = component == .aiNote
                 ? PrototypingDraftDocument.annotationFrame(
-                    for: document.note,
+                    for: PrototypingDraftDocument.annotationTextOrDefault(document.note),
                     existingFrame: baseFrame,
                     canvasSize: document.canvasSize.cgSize
                 )
@@ -203,7 +201,9 @@ public final class PrototypingDraftStore: ObservableObject {
             document.elements.append(
                 PrototypingCanvasElement(
                     component: component,
-                    title: component == .aiNote ? document.note : component.title,
+                    title: component == .aiNote
+                        ? PrototypingDraftDocument.annotationTextOrDefault(document.note)
+                        : component.title,
                     frame: frame
                 )
             )
