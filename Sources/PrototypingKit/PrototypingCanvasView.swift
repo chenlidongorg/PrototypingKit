@@ -14,22 +14,301 @@ struct PrototypingDraftCanvas: View {
     let document: PrototypingDraftDocument
 
     var body: some View {
-        ZStack {
-            Color.white
-
-            GridBackground()
-
-            if document.kind == .webPage {
-                WebWireframe(document: document)
+        canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
+            if document.elements.isEmpty {
+                if document.kind == .webPage {
+                    WebWireframe(document: document)
+                } else {
+                    PhoneWireframe(document: document)
+                }
             } else {
-                PhoneWireframe(document: document)
+                PrototypingCanvasElementsLayer(
+                    document: document,
+                    selectedElementID: nil,
+                    onSelect: nil,
+                    onMove: nil
+                )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: document.kind == .webPage ? 12 : 30, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: document.kind == .webPage ? 12 : 30, style: .continuous)
-                .stroke(Color.black.opacity(0.16), lineWidth: 2)
-        )
+    }
+}
+
+struct PrototypingEditableDraftCanvas: View {
+    let document: PrototypingDraftDocument
+    let selectedElementID: String?
+    let onSelect: (String) -> Void
+    let onMove: (String, PrototypingElementFrame, Bool) -> Void
+
+    var body: some View {
+        canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
+            PrototypingCanvasElementsLayer(
+                document: document,
+                selectedElementID: selectedElementID,
+                onSelect: onSelect,
+                onMove: onMove
+            )
+        }
+    }
+}
+
+private func canvasShell<Content: View>(
+    cornerRadius: CGFloat,
+    @ViewBuilder content: () -> Content
+) -> some View {
+    ZStack {
+        Color.white
+        GridBackground()
+        content()
+    }
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    .overlay(
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(Color.black.opacity(0.16), lineWidth: 2)
+    )
+}
+
+private struct PrototypingCanvasElementsLayer: View {
+    let document: PrototypingDraftDocument
+    let selectedElementID: String?
+    let onSelect: ((String) -> Void)?
+    let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
+
+    var body: some View {
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                ForEach(document.elements) { element in
+                    PrototypingElementContainer(
+                        element: element,
+                        canvasSize: document.canvasSize.cgSize,
+                        note: document.note,
+                        isSelected: element.id == selectedElementID,
+                        onSelect: onSelect,
+                        onMove: onMove
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct PrototypingElementContainer: View {
+    let element: PrototypingCanvasElement
+    let canvasSize: CGSize
+    let note: String
+    let isSelected: Bool
+    let onSelect: ((String) -> Void)?
+    let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
+
+    @State private var dragStartFrame: PrototypingElementFrame?
+
+    var body: some View {
+        let rect = element.frame.cgRect
+
+        PrototypingElementView(element: element, note: note)
+            .frame(width: rect.width, height: rect.height)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.blue.opacity(0.82) : Color.clear, lineWidth: 2)
+            )
+            .position(x: rect.midX, y: rect.midY)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect?(element.id)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        if dragStartFrame == nil {
+                            dragStartFrame = element.frame
+                            onSelect?(element.id)
+                        }
+
+                        guard let dragStartFrame else { return }
+                        let movedFrame = dragStartFrame.moved(by: value.translation, inside: canvasSize)
+                        onMove?(element.id, movedFrame, false)
+                    }
+                    .onEnded { value in
+                        let startFrame = dragStartFrame ?? element.frame
+                        let movedFrame = startFrame.moved(by: value.translation, inside: canvasSize)
+                        dragStartFrame = nil
+                        onMove?(element.id, movedFrame, true)
+                    }
+            )
+    }
+}
+
+private struct PrototypingElementView: View {
+    let element: PrototypingCanvasElement
+    let note: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            switch element.component {
+            case .title:
+                title(proxy.size)
+            case .button:
+                button(proxy.size)
+            case .input:
+                input(proxy.size)
+            case .search:
+                search(proxy.size)
+            case .card:
+                card(proxy.size)
+            case .listRow:
+                listRow(proxy.size)
+            case .imagePlaceholder:
+                imagePlaceholder(proxy.size)
+            case .bottomNavigation:
+                bottomNavigation(proxy.size)
+            case .dialog:
+                dialog(proxy.size)
+            case .arrow:
+                arrow(proxy.size)
+            case .aiNote:
+                noteView
+            }
+        }
+    }
+
+    private func title(_ size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: max(5, size.height * 0.18)) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.black.opacity(0.72))
+                .frame(width: size.width * 0.55, height: max(8, size.height * 0.34))
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.black.opacity(0.18))
+                .frame(width: size.width * 0.82, height: max(5, size.height * 0.2))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func button(_ size: CGSize) -> some View {
+        RoundedRectangle(cornerRadius: min(12, size.height * 0.28))
+            .fill(Color.blue.opacity(0.78))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(0.82))
+                    .frame(width: size.width * 0.42, height: max(6, size.height * 0.16))
+            )
+    }
+
+    private func input(_ size: CGSize) -> some View {
+        RoundedRectangle(cornerRadius: min(10, size.height * 0.25))
+            .stroke(Color.black.opacity(0.18), lineWidth: 1.5)
+            .background(Color.white.opacity(0.44))
+    }
+
+    private func search(_ size: CGSize) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: min(16, size.height * 0.42), weight: .semibold))
+                .foregroundColor(.gray)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.black.opacity(0.16))
+                .frame(width: size.width * 0.45, height: max(6, size.height * 0.16))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, min(14, size.width * 0.08))
+        .background(Color.gray.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: min(14, size.height * 0.34)))
+    }
+
+    private func card(_ size: CGSize) -> some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.black.opacity(0.18), style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                .frame(width: min(72, size.width * 0.25), height: size.height * 0.62)
+            VStack(alignment: .leading, spacing: max(7, size.height * 0.1)) {
+                line(width: size.width * 0.44, height: max(7, size.height * 0.11), opacity: 0.28)
+                line(width: size.width * 0.62, height: max(6, size.height * 0.09), opacity: 0.14)
+                line(width: size.width * 0.42, height: max(6, size.height * 0.09), opacity: 0.14)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.14), lineWidth: 1.5))
+    }
+
+    private func listRow(_ size: CGSize) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .stroke(Color.black.opacity(0.2), lineWidth: 2)
+                .frame(width: min(34, size.height * 0.62), height: min(34, size.height * 0.62))
+            VStack(alignment: .leading, spacing: 8) {
+                line(width: size.width * 0.52, height: 8, opacity: 0.24)
+                line(width: size.width * 0.38, height: 7, opacity: 0.14)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func imagePlaceholder(_ size: CGSize) -> some View {
+        RoundedRectangle(cornerRadius: 16)
+            .stroke(Color.black.opacity(0.2), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+            .overlay(
+                Image(systemName: "photo")
+                    .font(.system(size: min(34, size.height * 0.24)))
+                    .foregroundColor(.gray)
+            )
+    }
+
+    private func bottomNavigation(_ size: CGSize) -> some View {
+        HStack {
+            ForEach(0..<4, id: \.self) { index in
+                VStack(spacing: 6) {
+                    Circle()
+                        .fill(index == 0 ? Color.blue.opacity(0.65) : Color.black.opacity(0.24))
+                        .frame(width: min(18, size.height * 0.25), height: min(18, size.height * 0.25))
+                    line(width: min(34, size.width * 0.12), height: 6, opacity: 0.18)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.12), lineWidth: 1))
+    }
+
+    private func dialog(_ size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            line(width: size.width * 0.48, height: 8, opacity: 0.28)
+            line(width: size.width * 0.72, height: 7, opacity: 0.14)
+            line(width: size.width * 0.62, height: 7, opacity: 0.14)
+        }
+        .padding(14)
+        .background(Color.gray.opacity(0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func arrow(_ size: CGSize) -> some View {
+        Path { path in
+            let midY = size.height / 2
+            path.move(to: CGPoint(x: 8, y: midY))
+            path.addLine(to: CGPoint(x: size.width - 18, y: midY))
+            path.move(to: CGPoint(x: size.width - 34, y: midY - 13))
+            path.addLine(to: CGPoint(x: size.width - 16, y: midY))
+            path.addLine(to: CGPoint(x: size.width - 34, y: midY + 13))
+        }
+        .stroke(Color.blue.opacity(0.78), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+    }
+
+    private var noteView: some View {
+        Text(note.isEmpty ? "核心功能" : note)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.black.opacity(0.82))
+            .lineLimit(2)
+            .minimumScaleFactor(0.76)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.yellow.opacity(0.86))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.35), lineWidth: 1))
+    }
+
+    private func line(width: CGFloat, height: CGFloat, opacity: Double) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(Color.black.opacity(opacity))
+            .frame(width: max(8, width), height: height)
     }
 }
 

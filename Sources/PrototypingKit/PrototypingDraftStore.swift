@@ -70,6 +70,92 @@ public final class PrototypingDraftStore: ObservableObject {
         saveCurrentDocument()
     }
 
+    public func applyTemplate(_ template: PrototypingTemplate) {
+        update { document in
+            document.template = template
+            document.kind = template.kind
+            document.canvasSize = template.kind == .webPage ? .web : .phone
+            document.elements = PrototypingDraftDocument.defaultElements(
+                for: template,
+                canvasSize: document.canvasSize
+            )
+            document.enabledComponents = uniqueComponents(in: document.elements)
+        }
+    }
+
+    public func applyKind(_ kind: PrototypingDraftKind) {
+        update { document in
+            let template: PrototypingTemplate = kind == .webPage ? .webHome : .blankPhone
+            document.kind = kind
+            document.template = template
+            document.canvasSize = kind == .webPage ? .web : .phone
+            document.elements = PrototypingDraftDocument.defaultElements(
+                for: template,
+                canvasSize: document.canvasSize
+            )
+            
+            if kind == .flowNote {
+                document.elements.append(
+                    PrototypingCanvasElement(
+                        component: .arrow,
+                        title: PrototypingComponent.arrow.title,
+                        frame: PrototypingElementFrame(x: 120, y: 610, width: 150, height: 42)
+                    )
+                )
+            } else if kind == .deviceShowcase {
+                document.elements.append(
+                    PrototypingCanvasElement(
+                        component: .imagePlaceholder,
+                        title: PrototypingComponent.imagePlaceholder.title,
+                        frame: PrototypingElementFrame(x: 74, y: 588, width: 242, height: 140)
+                    )
+                )
+            }
+            
+            document.enabledComponents = uniqueComponents(in: document.elements)
+        }
+    }
+
+    public func addComponent(_ component: PrototypingComponent) {
+        update { document in
+            let frame = PrototypingDraftDocument.defaultFrame(
+                for: component,
+                canvasSize: document.canvasSize
+            )
+            document.elements.append(
+                PrototypingCanvasElement(
+                    component: component,
+                    title: component.title,
+                    frame: frame
+                )
+            )
+            if !document.enabledComponents.contains(component) {
+                document.enabledComponents.append(component)
+            }
+        }
+    }
+
+    public func moveElement(id: String, to frame: PrototypingElementFrame, persist: Bool) {
+        guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }) else { return }
+        var document = currentDocument
+        document.elements[index].frame = frame
+        if persist {
+            document.updatedAt = Date()
+            document.revisionID = UUID().uuidString
+        }
+        currentDocument = document
+        if persist {
+            saveCurrentDocument()
+        }
+    }
+
+    public func deleteElement(id: String) {
+        update { document in
+            document.elements.removeAll { $0.id == id }
+            document.enabledComponents = uniqueComponents(in: document.elements)
+        }
+    }
+
     public func exportImage(recommendedIntent: PrototypingImportIntent = .setAsBackground) -> PrototypingExportResult {
         saveCurrentDocument()
         let image = PrototypingRenderer.renderImage(document: currentDocument)
@@ -148,6 +234,14 @@ public final class PrototypingDraftStore: ObservableObject {
         records.removeAll { $0.id == record.id }
         records.insert(record, at: 0)
         records = records.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private func uniqueComponents(in elements: [PrototypingCanvasElement]) -> [PrototypingComponent] {
+        var result: [PrototypingComponent] = []
+        for element in elements where !result.contains(element.component) {
+            result.append(element.component)
+        }
+        return result
     }
 
     private func writeThumbnail(for document: PrototypingDraftDocument) {

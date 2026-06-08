@@ -21,6 +21,7 @@ public struct PrototypingKitView: View {
 
     @State private var alertMessage = ""
     @State private var showAlert = false
+    @State private var selectedElementID: String?
 
     @MainActor
     public init(
@@ -98,7 +99,14 @@ public struct PrototypingKitView: View {
                 Divider()
 
                 ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                    PrototypingDraftCanvas(document: store.currentDocument)
+                    PrototypingEditableDraftCanvas(
+                        document: store.currentDocument,
+                        selectedElementID: selectedElementID,
+                        onSelect: { selectedElementID = $0 },
+                        onMove: { id, frame, persist in
+                            store.moveElement(id: id, to: frame, persist: persist)
+                        }
+                    )
                         .frame(
                             width: store.currentDocument.canvasSize.cgSize.width,
                             height: store.currentDocument.canvasSize.cgSize.height
@@ -156,15 +164,8 @@ public struct PrototypingKitView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
                     ForEach(PrototypingDraftKind.allCases) { kind in
                         ChoiceChip(title: kind.title, isSelected: store.currentDocument.kind == kind) {
-                            store.update { document in
-                                document.kind = kind
-                                document.canvasSize = kind == .webPage ? .web : .phone
-                                if document.template.kind != kind && kind == .webPage {
-                                    document.template = .webHome
-                                } else if kind == .appPage && document.template.kind != .appPage {
-                                    document.template = .blankPhone
-                                }
-                            }
+                            selectedElementID = nil
+                            store.applyKind(kind)
                         }
                     }
                 }
@@ -174,11 +175,8 @@ public struct PrototypingKitView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
                     ForEach(availableTemplates) { template in
                         TemplateCard(template: template, isSelected: store.currentDocument.template == template) {
-                            store.update { document in
-                                document.template = template
-                                document.kind = template.kind
-                                document.canvasSize = template.kind == .webPage ? .web : .phone
-                            }
+                            selectedElementID = nil
+                            store.applyTemplate(template)
                         }
                     }
                 }
@@ -189,17 +187,25 @@ public struct PrototypingKitView: View {
                     ForEach(PrototypingComponent.allCases) { component in
                         ChoiceChip(
                             title: component.title,
-                            isSelected: store.currentDocument.enabledComponents.contains(component)
+                            isSelected: selectedElement?.component == component
                         ) {
-                            store.update { document in
-                                if document.enabledComponents.contains(component) {
-                                    document.enabledComponents.removeAll { $0 == component }
-                                } else {
-                                    document.enabledComponents.append(component)
-                                }
-                            }
+                            store.addComponent(component)
+                            selectedElementID = store.currentDocument.elements.last?.id
                         }
                     }
+                }
+
+                if selectedElementID != nil {
+                    Button(action: deleteSelectedElement) {
+                        Label("删除选中", systemImage: "trash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color(red: 0.78, green: 0.18, blue: 0.18))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(Color(red: 1.0, green: 0.94, blue: 0.94))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -253,6 +259,11 @@ public struct PrototypingKitView: View {
         )
     }
 
+    private var selectedElement: PrototypingCanvasElement? {
+        guard let selectedElementID else { return nil }
+        return store.currentDocument.elements.first { $0.id == selectedElementID }
+    }
+
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 14, weight: .semibold))
@@ -275,6 +286,12 @@ public struct PrototypingKitView: View {
             alertMessage = "PDF 导出失败：\(error.localizedDescription)"
             showAlert = true
         }
+    }
+
+    private func deleteSelectedElement() {
+        guard let selectedElementID else { return }
+        store.deleteElement(id: selectedElementID)
+        self.selectedElementID = nil
     }
 }
 
