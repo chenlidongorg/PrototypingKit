@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 14.0, macCatalyst 14.0, *)
 public struct PrototypingKitView: View {
     @ObservedObject private var store: PrototypingDraftStore
     private let onExport: (PrototypingExportResult) -> Void
@@ -265,7 +266,7 @@ private struct DraftRecordRow: View {
                 Text(record.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
-                Text(record.updatedAt, style: .date)
+                Text(formattedUpdatedAt)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -275,6 +276,12 @@ private struct DraftRecordRow: View {
         .padding(8)
         .background(isSelected ? Color.blue.opacity(0.08) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var formattedUpdatedAt: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter.string(from: record.updatedAt)
     }
 }
 

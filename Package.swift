@@ -5,8 +5,8 @@ import PackageDescription
 let package = Package(
     name: "PrototypingKit",
     platforms: [
-        .iOS(.v14),
-        .macCatalyst(.v14)
+        .iOS(.v13),
+        .macCatalyst(.v13)
     ],
     products: [
         .library(
