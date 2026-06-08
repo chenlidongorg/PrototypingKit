@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PrototypingExportCanvas: View {
     let document: PrototypingDraftDocument
@@ -24,10 +25,7 @@ struct PrototypingDraftCanvas: View {
             } else {
                 PrototypingCanvasElementsLayer(
                     document: document,
-                    selectedElementID: nil,
-                    onSelect: nil,
-                    onMove: nil,
-                    onDelete: nil
+                    selectedElementID: nil
                 )
             }
         }
@@ -45,7 +43,10 @@ struct PrototypingEditableDraftCanvas: View {
         canvasShell(cornerRadius: document.kind == .webPage ? 12 : 30) {
             PrototypingCanvasElementsLayer(
                 document: document,
-                selectedElementID: selectedElementID,
+                selectedElementID: selectedElementID
+            )
+            PrototypingCanvasInteractionOverlay(
+                document: document,
                 onSelect: onSelect,
                 onMove: onMove,
                 onDelete: onDelete
@@ -73,9 +74,6 @@ private func canvasShell<Content: View>(
 private struct PrototypingCanvasElementsLayer: View {
     let document: PrototypingDraftDocument
     let selectedElementID: String?
-    let onSelect: ((String) -> Void)?
-    let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
-    let onDelete: ((String) -> Void)?
 
     var body: some View {
         GeometryReader { _ in
@@ -85,13 +83,11 @@ private struct PrototypingCanvasElementsLayer: View {
                         element: element,
                         canvasSize: document.canvasSize.cgSize,
                         note: document.note,
-                        isSelected: element.id == selectedElementID,
-                        onSelect: onSelect,
-                        onMove: onMove,
-                        onDelete: onDelete
+                        isSelected: element.id == selectedElementID
                     )
                 }
             }
+            .allowsHitTesting(false)
         }
     }
 }
@@ -101,11 +97,6 @@ private struct PrototypingElementContainer: View {
     let canvasSize: CGSize
     let note: String
     let isSelected: Bool
-    let onSelect: ((String) -> Void)?
-    let onMove: ((String, PrototypingElementFrame, Bool) -> Void)?
-    let onDelete: ((String) -> Void)?
-
-    @State private var dragStartFrame: PrototypingElementFrame?
 
     var body: some View {
         let rect = element.frame.cgRect
@@ -117,38 +108,185 @@ private struct PrototypingElementContainer: View {
                     .stroke(isSelected ? Color.blue.opacity(0.82) : Color.clear, lineWidth: 2)
             )
             .position(x: rect.midX, y: rect.midY)
-            .contentShape(Rectangle())
-            .highPriorityGesture(
-                TapGesture(count: 2)
-                    .onEnded {
-                        onDelete?(element.id)
-                    }
-            )
-            .simultaneousGesture(
-                TapGesture(count: 1)
-                    .onEnded {
-                        onSelect?(element.id)
-                    }
-            )
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        if dragStartFrame == nil {
-                            dragStartFrame = element.frame
-                            onSelect?(element.id)
-                        }
+    }
+}
 
-                        guard let dragStartFrame else { return }
-                        let movedFrame = dragStartFrame.moved(by: value.translation, inside: canvasSize)
-                        onMove?(element.id, movedFrame, false)
-                    }
-                    .onEnded { value in
-                        let startFrame = dragStartFrame ?? element.frame
-                        let movedFrame = startFrame.moved(by: value.translation, inside: canvasSize)
-                        dragStartFrame = nil
-                        onMove?(element.id, movedFrame, true)
-                    }
-            )
+private struct PrototypingCanvasInteractionOverlay: View {
+    let document: PrototypingDraftDocument
+    let onSelect: (String) -> Void
+    let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onDelete: (String) -> Void
+
+    @State private var draggingElementID: String?
+    @State private var draggingStartFrame: PrototypingElementFrame?
+
+    var body: some View {
+        PrototypingCanvasGestureView(
+            canBeginPan: { point in
+                hitElement(at: point) != nil
+            },
+            onSingleTap: { point in
+                guard let element = hitElement(at: point) else { return }
+                onSelect(element.id)
+            },
+            onDoubleTap: { point in
+                guard let element = hitElement(at: point) else { return }
+                onDelete(element.id)
+            },
+            onPanBegan: { point in
+                guard let element = hitElement(at: point) else {
+                    draggingElementID = nil
+                    draggingStartFrame = nil
+                    return
+                }
+                draggingElementID = element.id
+                draggingStartFrame = element.frame
+                onSelect(element.id)
+            },
+            onPanChanged: { _, translation in
+                guard let draggingElementID, let draggingStartFrame else { return }
+                let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
+                onMove(draggingElementID, frame, false)
+            },
+            onPanEnded: { _, translation in
+                guard let draggingElementID, let draggingStartFrame else { return }
+                let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
+                onMove(draggingElementID, frame, true)
+                self.draggingElementID = nil
+                self.draggingStartFrame = nil
+            }
+        )
+    }
+
+    private func hitElement(at point: CGPoint) -> PrototypingCanvasElement? {
+        let candidates = document.elements.enumerated().filter { _, element in
+            element.frame.cgRect.insetBy(dx: -4, dy: -4).contains(point)
+        }
+
+        return candidates.sorted { lhs, rhs in
+            let lhsArea = lhs.element.frame.cgRect.width * lhs.element.frame.cgRect.height
+            let rhsArea = rhs.element.frame.cgRect.width * rhs.element.frame.cgRect.height
+
+            if abs(lhsArea - rhsArea) > 1 {
+                return lhsArea < rhsArea
+            }
+
+            return lhs.offset > rhs.offset
+        }
+        .first?
+        .element
+    }
+}
+
+private struct PrototypingCanvasGestureView: UIViewRepresentable {
+    var canBeginPan: (CGPoint) -> Bool
+    var onSingleTap: (CGPoint) -> Void
+    var onDoubleTap: (CGPoint) -> Void
+    var onPanBegan: (CGPoint) -> Void
+    var onPanChanged: (CGPoint, CGSize) -> Void
+    var onPanEnded: (CGPoint, CGSize) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            canBeginPan: canBeginPan,
+            onSingleTap: onSingleTap,
+            onDoubleTap: onDoubleTap,
+            onPanBegan: onPanBegan,
+            onPanChanged: onPanChanged,
+            onPanEnded: onPanEnded
+        )
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        let singleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSingleTap(_:)))
+        singleTap.numberOfTapsRequired = 1
+
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        singleTap.require(toFail: doubleTap)
+
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        pan.delegate = context.coordinator
+
+        view.addGestureRecognizer(singleTap)
+        view.addGestureRecognizer(doubleTap)
+        view.addGestureRecognizer(pan)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.canBeginPan = canBeginPan
+        context.coordinator.onSingleTap = onSingleTap
+        context.coordinator.onDoubleTap = onDoubleTap
+        context.coordinator.onPanBegan = onPanBegan
+        context.coordinator.onPanChanged = onPanChanged
+        context.coordinator.onPanEnded = onPanEnded
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var canBeginPan: (CGPoint) -> Bool
+        var onSingleTap: (CGPoint) -> Void
+        var onDoubleTap: (CGPoint) -> Void
+        var onPanBegan: (CGPoint) -> Void
+        var onPanChanged: (CGPoint, CGSize) -> Void
+        var onPanEnded: (CGPoint, CGSize) -> Void
+
+        init(
+            canBeginPan: @escaping (CGPoint) -> Bool,
+            onSingleTap: @escaping (CGPoint) -> Void,
+            onDoubleTap: @escaping (CGPoint) -> Void,
+            onPanBegan: @escaping (CGPoint) -> Void,
+            onPanChanged: @escaping (CGPoint, CGSize) -> Void,
+            onPanEnded: @escaping (CGPoint, CGSize) -> Void
+        ) {
+            self.canBeginPan = canBeginPan
+            self.onSingleTap = onSingleTap
+            self.onDoubleTap = onDoubleTap
+            self.onPanBegan = onPanBegan
+            self.onPanChanged = onPanChanged
+            self.onPanEnded = onPanEnded
+        }
+
+        @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            onSingleTap(recognizer.location(in: view))
+        }
+
+        @objc func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            onDoubleTap(recognizer.location(in: view))
+        }
+
+        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            let point = recognizer.location(in: view)
+            let translation = recognizer.translation(in: view)
+            let translationSize = CGSize(width: translation.x, height: translation.y)
+
+            switch recognizer.state {
+            case .began:
+                onPanBegan(point)
+            case .changed:
+                onPanChanged(point, translationSize)
+            case .ended, .cancelled, .failed:
+                onPanEnded(point, translationSize)
+            default:
+                break
+            }
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard gestureRecognizer is UIPanGestureRecognizer,
+                  let view = gestureRecognizer.view
+            else {
+                return true
+            }
+
+            return canBeginPan(gestureRecognizer.location(in: view))
+        }
     }
 }
 

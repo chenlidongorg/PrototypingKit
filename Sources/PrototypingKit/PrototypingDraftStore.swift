@@ -143,32 +143,13 @@ public final class PrototypingDraftStore: ObservableObject {
         currentDocument = document
     }
 
-    public func snappedFrame(id: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
+    public func snappedFrame(id _: String, proposedFrame: PrototypingElementFrame) -> PrototypingElementFrame {
         let canvasSize = currentDocument.canvasSize.cgSize
-        let proposedRect = proposedFrame.cgRect
-        let otherRects = currentDocument.elements
-            .filter { $0.id != id }
-            .map { $0.frame.cgRect }
-
-        var xGuides: [CGFloat] = [0, canvasSize.width / 2, canvasSize.width]
-        var yGuides: [CGFloat] = [0, canvasSize.height / 2, canvasSize.height]
-        for rect in otherRects {
-            xGuides.append(contentsOf: [rect.minX, rect.midX, rect.maxX])
-            yGuides.append(contentsOf: [rect.minY, rect.midY, rect.maxY])
-        }
-
-        let dx = nearestSnapOffset(
-            anchors: [proposedRect.minX, proposedRect.midX, proposedRect.maxX],
-            guides: xGuides
-        )
-        let dy = nearestSnapOffset(
-            anchors: [proposedRect.minY, proposedRect.midY, proposedRect.maxY],
-            guides: yGuides
-        )
+        let snapUnit: CGFloat = 4
 
         return PrototypingElementFrame(
-            x: proposedFrame.x + Double(dx),
-            y: proposedFrame.y + Double(dy),
+            x: Double(snap(CGFloat(proposedFrame.x), unit: snapUnit)),
+            y: Double(snap(CGFloat(proposedFrame.y), unit: snapUnit)),
             width: proposedFrame.width,
             height: proposedFrame.height
         )
@@ -284,23 +265,9 @@ public final class PrototypingDraftStore: ObservableObject {
         return result
     }
 
-    private func nearestSnapOffset(anchors: [CGFloat], guides: [CGFloat]) -> CGFloat {
-        let threshold: CGFloat = 8
-        var bestOffset: CGFloat = 0
-        var bestDistance = threshold
-
-        for anchor in anchors {
-            for guide in guides {
-                let offset = guide - anchor
-                let distance = abs(offset)
-                if distance < bestDistance {
-                    bestDistance = distance
-                    bestOffset = offset
-                }
-            }
-        }
-
-        return bestOffset
+    private func snap(_ value: CGFloat, unit: CGFloat) -> CGFloat {
+        guard unit > 0 else { return value }
+        return (value / unit).rounded() * unit
     }
 
     private func writeThumbnail(for document: PrototypingDraftDocument) {
