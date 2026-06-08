@@ -537,20 +537,32 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    DisclosureHeader(title: "模板", isExpanded: isTemplateSectionVisible) {
-                        isTemplateSectionVisible.toggle()
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            isTemplateSectionVisible.toggle()
+                        }) {
+                            HStack {
+                                Text("模板")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(PrototypingKitColors.secondaryInk)
+                                Image(systemName: isTemplateSectionVisible ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(PrototypingKitColors.subtleInk)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
+                        Spacer()
+
+                        Button(action: { activeLibrary = .templates }) {
+                            Label("更多", systemImage: "ellipsis.circle")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
 
                     if isTemplateSectionVisible {
-                        HStack {
-                            Spacer()
-                            Button(action: { activeLibrary = .templates }) {
-                                Label("更多", systemImage: "ellipsis.circle")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
                             ForEach(quickTemplates) { template in
                                 TemplateCard(template: template, isSelected: store.currentDocument.template == template) {
@@ -658,7 +670,7 @@ public struct PrototypingKitView: View {
     }
 
     private var quickTemplates: [PrototypingTemplate] {
-        Array(uniqueTemplates(recentTemplates + recommendedTemplates).prefix(4))
+        Array(uniqueTemplates(recentTemplates + recommendedTemplates).prefix(2))
     }
 
     private var recommendedTemplates: [PrototypingTemplate] {
