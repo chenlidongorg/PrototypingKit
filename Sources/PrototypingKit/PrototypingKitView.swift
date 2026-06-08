@@ -20,19 +20,35 @@ private enum PrototypingLibrarySheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+private enum PrototypingKitAlert: Identifiable {
+    case message(String)
+    case applyTemplate(PrototypingTemplate)
+
+    var id: String {
+        switch self {
+        case .message(let message):
+            return "message-\(message)"
+        case .applyTemplate(let template):
+            return "template-\(template.rawValue)"
+        }
+    }
+}
+
 @available(iOS 14.0, macCatalyst 14.0, *)
 public struct PrototypingKitView: View {
     @ObservedObject private var store: PrototypingDraftStore
     private let onExport: (PrototypingExportResult) -> Void
     private let onClose: () -> Void
 
-    @State private var alertMessage = ""
-    @State private var showAlert = false
+    @State private var activeAlert: PrototypingKitAlert?
     @State private var selectedElementID: String?
     @State private var isSidebarExpanded = false
+    @State private var inspectorExpandedOverride: Bool?
     @State private var activeLibrary: PrototypingLibrarySheet?
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
+    @AppStorage("PrototypingKit.showTemplateSection") private var isTemplateSectionVisible = false
+    @AppStorage("PrototypingKit.showGridSection") private var isGridSectionVisible = false
 
     @MainActor
     public init(
@@ -55,13 +71,29 @@ public struct PrototypingKitView: View {
         .foregroundColor(PrototypingKitColors.ink)
         .accentColor(PrototypingKitColors.accent)
         .environment(\.colorScheme, .light)
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("原型设计测试版"), message: Text(alertMessage), dismissButton: .default(Text("好")))
+        .alert(item: $activeAlert) { alert in
+            switch alert {
+            case .message(let message):
+                return Alert(
+                    title: Text("原型设计测试版"),
+                    message: Text(message),
+                    dismissButton: .default(Text("好"))
+                )
+            case .applyTemplate(let template):
+                return Alert(
+                    title: Text("套用模板？"),
+                    message: Text("会替换当前设备和方向里的组件。已做好的其它设备状态会保留。"),
+                    primaryButton: .destructive(Text("套用")) {
+                        commitTemplate(template)
+                    },
+                    secondaryButton: .cancel(Text("取消"))
+                )
+            }
         }
     }
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .semibold))
@@ -74,28 +106,38 @@ public struct PrototypingKitView: View {
                 .foregroundColor(PrototypingKitColors.ink)
                 .textFieldStyle(PlainTextFieldStyle())
 
-            Button(action: createDraft) {
-                Label("新建", systemImage: "plus")
+            HStack(spacing: 8) {
+                Button(action: createDraft) {
+                    Label("新建", systemImage: "plus")
+                }
             }
+            .padding(.horizontal, 4)
 
-            Button(action: exportPDF) {
-                Label("PDF", systemImage: "doc.richtext")
-            }
+            HStack(spacing: 8) {
+                Button(action: insertIntoHost) {
+                    Label("插入画布", systemImage: "square.and.arrow.down")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(PrototypingKitColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(PlainButtonStyle())
 
-            Button(action: exportForAI) {
-                Label("导出给AI", systemImage: "sparkles")
+                Menu {
+                    Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
+                        Label("保存 PDF", systemImage: "doc.badge.plus")
+                    }
+                    Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
+                        Label("分享 PDF", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(PrototypingKitColors.ink)
+                }
             }
-
-            Button(action: insertIntoHost) {
-                Label("插入画布", systemImage: "square.and.arrow.down")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(PrototypingKitColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -103,6 +145,10 @@ public struct PrototypingKitView: View {
 
     private var content: some View {
         GeometryReader { proxy in
+            let isWide = proxy.size.width >= 900
+            let inspectorIsExpanded = inspectorExpandedOverride ?? isWide
+            let inspectorWidth = min(max(proxy.size.width * 0.28, 250), 340)
+
             ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
                     ScrollView([.vertical, .horizontal], showsIndicators: true) {
@@ -115,6 +161,9 @@ public struct PrototypingKitView: View {
                                 let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
                                 store.moveElement(id: id, to: snappedFrame, persist: persist)
                             },
+                            onUpdateAnnotationArrow: { id, anchor, target, persist in
+                                store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
+                            },
                             onDelete: deleteElement
                         )
                             .frame(
@@ -125,10 +174,12 @@ public struct PrototypingKitView: View {
                     }
                     .background(PrototypingKitColors.canvasSurface)
 
-                    Divider()
+                    if inspectorIsExpanded && isWide {
+                        Divider()
 
-                    inspector
-                        .frame(width: min(max(proxy.size.width * 0.25, 250), 330))
+                        inspector
+                            .frame(width: inspectorWidth)
+                    }
                 }
 
                 if isSidebarExpanded {
@@ -148,6 +199,27 @@ public struct PrototypingKitView: View {
                     sidebarLauncher
                         .padding(.leading, 14)
                         .padding(.top, 14)
+                }
+
+                if inspectorIsExpanded && !isWide {
+                    Color.black.opacity(0.08)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            inspectorExpandedOverride = false
+                        }
+
+                    inspector
+                        .frame(width: inspectorWidth)
+                        .frame(maxHeight: .infinity)
+                        .background(PrototypingKitColors.panel)
+                        .shadow(color: Color.black.opacity(0.16), radius: 18, x: -10, y: 0)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .transition(.move(edge: .trailing))
+                } else if !inspectorIsExpanded {
+                    inspectorLauncher
+                        .padding(.trailing, 14)
+                        .padding(.top, 14)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
         }
@@ -212,9 +284,42 @@ public struct PrototypingKitView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    private var inspectorLauncher: some View {
+        Button(action: { inspectorExpandedOverride = true }) {
+            HStack(spacing: 6) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("工具")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(PrototypingKitColors.accent)
+            .padding(.horizontal, 10)
+            .frame(height: 38)
+            .background(PrototypingKitColors.panel.opacity(0.96))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(PrototypingKitColors.separator, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     private var inspector: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    sectionTitle("操作工具")
+                    Spacer()
+                    Button(action: { inspectorExpandedOverride = false }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(PrototypingKitColors.secondaryInk)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     sectionTitle("草稿类型")
 
@@ -229,7 +334,7 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("设备")
+                    sectionTitle(store.currentDocument.kind == .webPage ? "画布" : "设备")
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                         if store.currentDocument.kind == .webPage {
@@ -243,39 +348,39 @@ public struct PrototypingKitView: View {
                             }
                         }
                     }
-                }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("网格")
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 62), spacing: 8)], spacing: 8) {
-                        ForEach(gridSizeOptions, id: \.self) { gridSize in
-                            ChoiceChip(
-                                title: "\(Int(gridSize))",
-                                isSelected: Int(store.currentDocument.gridSize) == Int(gridSize)
-                            ) {
-                                selectedElementID = nil
-                                store.updateGridSize(gridSize)
+                    if store.currentDocument.kind != .webPage {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
+                            ForEach(PrototypingDeviceOrientation.allCases) { orientation in
+                                ChoiceChip(title: orientation.title, isSelected: store.currentDocument.orientation == orientation) {
+                                    selectedElementID = nil
+                                    store.applyOrientation(orientation)
+                                }
                             }
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        sectionTitle("模板")
-                        Spacer()
-                        Button(action: { activeLibrary = .templates }) {
-                            Label("更多", systemImage: "ellipsis.circle")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                    DisclosureHeader(title: "模板", isExpanded: isTemplateSectionVisible) {
+                        isTemplateSectionVisible.toggle()
                     }
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
-                        ForEach(quickTemplates) { template in
-                            TemplateCard(template: template, isSelected: store.currentDocument.template == template) {
-                                applyTemplateFromUI(template)
+                    if isTemplateSectionVisible {
+                        HStack {
+                            Spacer()
+                            Button(action: { activeLibrary = .templates }) {
+                                Label("更多", systemImage: "ellipsis.circle")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
+                            ForEach(quickTemplates) { template in
+                                TemplateCard(template: template, isSelected: store.currentDocument.template == template) {
+                                    applyTemplateFromUI(template)
+                                }
                             }
                         }
                     }
@@ -305,7 +410,7 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    sectionTitle("AI标注")
+                    sectionTitle("注释")
                     TextField("例如：核心功能", text: noteBinding)
                         .font(.system(size: 14))
                         .foregroundColor(PrototypingKitColors.ink)
@@ -318,6 +423,26 @@ public struct PrototypingKitView: View {
                                 .stroke(PrototypingKitColors.separator, lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    DisclosureHeader(title: "网格", isExpanded: isGridSectionVisible) {
+                        isGridSectionVisible.toggle()
+                    }
+
+                    if isGridSectionVisible {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 62), spacing: 8)], spacing: 8) {
+                            ForEach(gridSizeOptions, id: \.self) { gridSize in
+                                ChoiceChip(
+                                    title: "\(Int(gridSize))",
+                                    isSelected: Int(store.currentDocument.gridSize) == Int(gridSize)
+                                ) {
+                                    selectedElementID = nil
+                                    store.updateGridSize(gridSize)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .padding(16)
@@ -351,9 +476,9 @@ public struct PrototypingKitView: View {
     private var availableTemplates: [PrototypingTemplate] {
         switch store.currentDocument.kind {
         case .webPage:
-            return [.webHome, .landing, .pricing, .dashboard]
+            return [.blank, .webHome, .landing, .pricing, .dashboard]
         case .flowNote, .deviceShowcase, .appPage:
-            return [.blankPhone, .blankTablet, .list, .detail, .form, .login, .chat, .onboarding, .profile, .settings, .checkout, .tabletDashboard]
+            return [.blank, .list, .detail, .form, .login, .chat, .onboarding, .profile, .settings, .checkout, .tabletDashboard]
         }
     }
 
@@ -364,15 +489,11 @@ public struct PrototypingKitView: View {
     private var recommendedTemplates: [PrototypingTemplate] {
         switch store.currentDocument.kind {
         case .webPage:
-            return [.webHome, .landing, .pricing, .dashboard]
-        case .deviceShowcase:
-            return [.blankPhone, .blankTablet, .detail, .tabletDashboard]
-        case .flowNote:
-            return [.list, .form, .checkout, .settings]
-        case .appPage:
+            return [.blank, .webHome, .landing, .pricing]
+        case .deviceShowcase, .flowNote, .appPage:
             return store.currentDocument.device == .tablet
-                ? [.blankTablet, .tabletDashboard, .list, .profile]
-                : [.blankPhone, .list, .detail, .form]
+                ? [.blank, .tabletDashboard, .list, .profile]
+                : [.blank, .list, .detail, .form]
         }
     }
 
@@ -455,6 +576,14 @@ public struct PrototypingKitView: View {
 
     private func applyTemplateFromUI(_ template: PrototypingTemplate) {
         selectedElementID = nil
+        if store.currentDocument.elements.isEmpty {
+            commitTemplate(template)
+        } else {
+            activeAlert = .applyTemplate(template)
+        }
+    }
+
+    private func commitTemplate(_ template: PrototypingTemplate) {
         rememberTemplate(template)
         store.applyTemplate(template)
     }
@@ -504,17 +633,12 @@ public struct PrototypingKitView: View {
         onExport(store.exportImage(recommendedIntent: .setAsBackground))
     }
 
-    private func exportForAI() {
-        onExport(store.exportImage(recommendedIntent: .sendToAI))
-    }
-
-    private func exportPDF() {
+    private func exportPDF(recommendedIntent: PrototypingImportIntent) {
         do {
-            let result = try store.exportPDF(recommendedIntent: .importAsNewPages)
+            let result = try store.exportPDF(recommendedIntent: recommendedIntent)
             onExport(result)
         } catch {
-            alertMessage = "PDF 导出失败：\(error.localizedDescription)"
-            showAlert = true
+            activeAlert = .message("PDF 导出失败：\(error.localizedDescription)")
         }
     }
 
@@ -595,6 +719,28 @@ private func libraryHeader(title: String, onClose: @escaping () -> Void) -> some
     .padding(.vertical, 14)
     .background(PrototypingKitColors.panel)
     .overlay(Rectangle().fill(PrototypingKitColors.separator).frame(height: 1), alignment: .bottom)
+}
+
+private struct DisclosureHeader: View {
+    let title: String
+    let isExpanded: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(PrototypingKitColors.secondaryInk)
+                Spacer()
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(PrototypingKitColors.subtleInk)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
 }
 
 private struct DraftRecordRow: View {
@@ -691,7 +837,9 @@ private struct TemplateThumbnail: View {
                 .fill(Color.black.opacity(0.22))
                 .frame(width: 44, height: 6)
 
-            if template == .login {
+            if template == .blank {
+                Spacer(minLength: 0)
+            } else if template == .login {
                 Circle().stroke(Color.black.opacity(0.18), lineWidth: 1).frame(width: 22, height: 22)
                 line(width: 54)
                 line(width: 54)

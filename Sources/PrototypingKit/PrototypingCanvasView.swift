@@ -16,18 +16,10 @@ struct PrototypingDraftCanvas: View {
 
     var body: some View {
         canvasShell(document: document) {
-            if document.elements.isEmpty {
-                if document.kind == .webPage {
-                    WebWireframe(document: document)
-                } else {
-                    PhoneWireframe(document: document)
-                }
-            } else {
-                PrototypingCanvasElementsLayer(
-                    document: document,
-                    selectedElementID: nil
-                )
-            }
+            PrototypingCanvasElementsLayer(
+                document: document,
+                selectedElementID: nil
+            )
         }
     }
 }
@@ -38,6 +30,7 @@ struct PrototypingEditableDraftCanvas: View {
     let onSelect: (String) -> Void
     let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
     let onDelete: (String) -> Void
 
     var body: some View {
@@ -52,9 +45,11 @@ struct PrototypingEditableDraftCanvas: View {
             )
             PrototypingCanvasInteractionOverlay(
                 document: document,
+                selectedElementID: selectedElementID,
                 onSelect: onSelect,
                 onDeselect: onDeselect,
                 onMove: onMove,
+                onUpdateAnnotationArrow: onUpdateAnnotationArrow,
                 onDelete: onDelete
             )
         }
@@ -84,6 +79,26 @@ private func canvasCornerRadius(for document: PrototypingDraftDocument) -> CGFlo
     return document.device == .tablet ? 24 : 30
 }
 
+private func annotationAnchorPoint(in rect: CGRect, anchor: PrototypingAnnotationAnchor) -> CGPoint {
+    switch anchor {
+    case .top:
+        return CGPoint(x: rect.midX, y: rect.minY)
+    case .bottom:
+        return CGPoint(x: rect.midX, y: rect.maxY)
+    case .left:
+        return CGPoint(x: rect.minX, y: rect.midY)
+    case .right:
+        return CGPoint(x: rect.maxX, y: rect.midY)
+    }
+}
+
+private func clampedPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
+    CGPoint(
+        x: min(max(0, point.x), size.width),
+        y: min(max(0, point.y), size.height)
+    )
+}
+
 private struct PrototypingCanvasElementsLayer: View {
     let document: PrototypingDraftDocument
     let selectedElementID: String?
@@ -91,6 +106,8 @@ private struct PrototypingCanvasElementsLayer: View {
     var body: some View {
         GeometryReader { _ in
             ZStack(alignment: .topLeading) {
+                AnnotationArrowLayer(document: document)
+
                 ForEach(document.elements) { element in
                     PrototypingElementContainer(
                         element: element,
@@ -116,13 +133,72 @@ private struct PrototypingElementContainer: View {
 
         PrototypingElementView(element: element, note: note)
             .frame(width: rect.width, height: rect.height)
-            .overlay(SelectionChrome(isSelected: isSelected))
+            .overlay(
+                SelectionChrome(
+                    isSelected: isSelected,
+                    showsAnnotationHandles: element.component == .aiNote
+                )
+            )
             .position(x: rect.midX, y: rect.midY)
+    }
+}
+
+private struct AnnotationArrowLayer: View {
+    let document: PrototypingDraftDocument
+
+    var body: some View {
+        GeometryReader { _ in
+            ForEach(annotatedElements) { element in
+                if let arrow = element.annotationArrow {
+                    AnnotationArrowShape(
+                        start: annotationAnchorPoint(in: element.frame.cgRect, anchor: arrow.anchor),
+                        end: clampedPoint(arrow.target.cgPoint, in: document.canvasSize.cgSize)
+                    )
+                    .stroke(Color.orange.opacity(0.86), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var annotatedElements: [PrototypingCanvasElement] {
+        document.elements.filter { $0.component == .aiNote && $0.annotationArrow != nil }
+    }
+}
+
+private struct AnnotationArrowShape: Shape {
+    let start: CGPoint
+    let end: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let headLength: CGFloat = 14
+        let headAngle: CGFloat = .pi / 7
+
+        path.move(to: start)
+        path.addLine(to: end)
+        path.move(to: end)
+        path.addLine(
+            to: CGPoint(
+                x: end.x - cos(angle - headAngle) * headLength,
+                y: end.y - sin(angle - headAngle) * headLength
+            )
+        )
+        path.move(to: end)
+        path.addLine(
+            to: CGPoint(
+                x: end.x - cos(angle + headAngle) * headLength,
+                y: end.y - sin(angle + headAngle) * headLength
+            )
+        )
+        return path
     }
 }
 
 private struct SelectionChrome: View {
     let isSelected: Bool
+    let showsAnnotationHandles: Bool
 
     var body: some View {
         GeometryReader { proxy in
@@ -137,6 +213,16 @@ private struct SelectionChrome: View {
                         .overlay(Circle().stroke(Color.blue.opacity(0.92), lineWidth: 2))
                         .frame(width: 9, height: 9)
                         .position(point)
+                }
+
+                if showsAnnotationHandles {
+                    ForEach(PrototypingAnnotationAnchor.allCases) { anchor in
+                        Circle()
+                            .fill(Color.orange.opacity(0.96))
+                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                            .frame(width: 12, height: 12)
+                            .position(annotationAnchorPoint(in: CGRect(origin: .zero, size: proxy.size), anchor: anchor))
+                    }
                 }
             }
         }
@@ -210,18 +296,26 @@ private struct GuideTag: View {
 
 private struct PrototypingCanvasInteractionOverlay: View {
     let document: PrototypingDraftDocument
+    let selectedElementID: String?
     let onSelect: (String) -> Void
     let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
     let onDelete: (String) -> Void
 
     @State private var draggingElementID: String?
     @State private var draggingStartFrame: PrototypingElementFrame?
+    @State private var draggingAnnotation: AnnotationDrag?
+
+    private struct AnnotationDrag {
+        let elementID: String
+        let anchor: PrototypingAnnotationAnchor
+    }
 
     var body: some View {
         PrototypingCanvasGestureView(
             canBeginPan: { point in
-                hitElement(at: point) != nil
+                hitAnnotationControl(at: point) != nil || hitElement(at: point) != nil
             },
             onSingleTap: { point in
                 guard let element = hitElement(at: point) else {
@@ -235,21 +329,52 @@ private struct PrototypingCanvasInteractionOverlay: View {
                 onDelete(element.id)
             },
             onPanBegan: { point in
+                if let annotationControl = hitAnnotationControl(at: point) {
+                    draggingAnnotation = annotationControl
+                    draggingElementID = nil
+                    draggingStartFrame = nil
+                    onSelect(annotationControl.elementID)
+                    return
+                }
+
                 guard let element = hitElement(at: point) else {
                     draggingElementID = nil
                     draggingStartFrame = nil
+                    draggingAnnotation = nil
                     return
                 }
                 draggingElementID = element.id
                 draggingStartFrame = element.frame
+                draggingAnnotation = nil
                 onSelect(element.id)
             },
-            onPanChanged: { _, translation in
+            onPanChanged: { point, translation in
+                if let draggingAnnotation {
+                    onUpdateAnnotationArrow(
+                        draggingAnnotation.elementID,
+                        draggingAnnotation.anchor,
+                        annotationTarget(at: point, for: draggingAnnotation),
+                        false
+                    )
+                    return
+                }
+
                 guard let draggingElementID, let draggingStartFrame else { return }
                 let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
                 onMove(draggingElementID, frame, false)
             },
-            onPanEnded: { _, translation in
+            onPanEnded: { point, translation in
+                if let draggingAnnotation {
+                    onUpdateAnnotationArrow(
+                        draggingAnnotation.elementID,
+                        draggingAnnotation.anchor,
+                        annotationTarget(at: point, for: draggingAnnotation),
+                        true
+                    )
+                    self.draggingAnnotation = nil
+                    return
+                }
+
                 guard let draggingElementID, let draggingStartFrame else { return }
                 let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
                 onMove(draggingElementID, frame, true)
@@ -257,6 +382,43 @@ private struct PrototypingCanvasInteractionOverlay: View {
                 self.draggingStartFrame = nil
             }
         )
+    }
+
+    private func hitAnnotationControl(at point: CGPoint) -> AnnotationDrag? {
+        guard let selectedAnnotation = selectedAnnotation else { return nil }
+        let rect = selectedAnnotation.frame.cgRect
+
+        for anchor in PrototypingAnnotationAnchor.allCases {
+            let anchorPoint = annotationAnchorPoint(in: rect, anchor: anchor)
+            if distance(from: point, to: anchorPoint) <= 18 {
+                return AnnotationDrag(elementID: selectedAnnotation.id, anchor: anchor)
+            }
+        }
+
+        if let arrow = selectedAnnotation.annotationArrow,
+           distance(from: point, to: arrow.target.cgPoint) <= 20 {
+            return AnnotationDrag(elementID: selectedAnnotation.id, anchor: arrow.anchor)
+        }
+
+        return nil
+    }
+
+    private func annotationTarget(at point: CGPoint, for drag: AnnotationDrag) -> CGPoint? {
+        guard let element = document.elements.first(where: { $0.id == drag.elementID }) else { return nil }
+        let rect = element.frame.cgRect
+        let anchorPoint = annotationAnchorPoint(in: rect, anchor: drag.anchor)
+        let target = clampedPoint(point, in: document.canvasSize.cgSize)
+
+        if rect.insetBy(dx: -18, dy: -18).contains(target) || distance(from: target, to: anchorPoint) < 24 {
+            return nil
+        }
+
+        return target
+    }
+
+    private var selectedAnnotation: PrototypingCanvasElement? {
+        guard let selectedElementID else { return nil }
+        return document.elements.first { $0.id == selectedElementID && $0.component == .aiNote }
     }
 
     private func hitElement(at point: CGPoint) -> PrototypingCanvasElement? {
@@ -276,6 +438,10 @@ private struct PrototypingCanvasInteractionOverlay: View {
         }
         .first?
         .element
+    }
+
+    private func distance(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
+        hypot(lhs.x - rhs.x, lhs.y - rhs.y)
     }
 }
 
@@ -797,7 +963,7 @@ private struct PhoneWireframe: View {
                 chat
             case .detail:
                 detail
-            case .list, .blankPhone, .blankTablet, .onboarding, .profile, .settings, .checkout, .tabletDashboard, .webHome, .dashboard, .landing, .pricing:
+            case .list, .blank, .blankPhone, .blankTablet, .onboarding, .profile, .settings, .checkout, .tabletDashboard, .webHome, .dashboard, .landing, .pricing:
                 list
             }
 

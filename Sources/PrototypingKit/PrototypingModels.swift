@@ -9,6 +9,14 @@ public enum PrototypingDraftKind: String, Codable, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
+    public static var allCases: [PrototypingDraftKind] {
+        [.appPage, .webPage]
+    }
+
+    public var normalized: PrototypingDraftKind {
+        self == .webPage ? .webPage : .appPage
+    }
+
     public var title: String {
         switch self {
         case .appPage:
@@ -39,16 +47,37 @@ public enum PrototypingDeviceKind: String, Codable, CaseIterable, Identifiable {
     }
 
     public var canvasSize: PrototypingCanvasSize {
+        canvasSize(for: .portrait)
+    }
+
+    public func canvasSize(for orientation: PrototypingDeviceOrientation) -> PrototypingCanvasSize {
         switch self {
         case .phone:
-            return .phone
+            return orientation == .portrait ? .phonePortrait : .phoneLandscape
         case .tablet:
-            return .tablet
+            return orientation == .portrait ? .tabletPortrait : .tabletLandscape
+        }
+    }
+}
+
+public enum PrototypingDeviceOrientation: String, Codable, CaseIterable, Identifiable {
+    case portrait
+    case landscape
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .portrait:
+            return "竖屏"
+        case .landscape:
+            return "横屏"
         }
     }
 }
 
 public enum PrototypingTemplate: String, Codable, CaseIterable, Identifiable {
+    case blank
     case blankPhone
     case blankTablet
     case login
@@ -70,6 +99,8 @@ public enum PrototypingTemplate: String, Codable, CaseIterable, Identifiable {
 
     public var title: String {
         switch self {
+        case .blank:
+            return "空白模板"
         case .blankPhone:
             return "空白手机页"
         case .blankTablet:
@@ -116,6 +147,8 @@ public enum PrototypingTemplate: String, Codable, CaseIterable, Identifiable {
 
     public var preferredDevice: PrototypingDeviceKind? {
         switch self {
+        case .blank:
+            return nil
         case .blankPhone:
             return .phone
         case .blankTablet, .tabletDashboard:
@@ -199,7 +232,7 @@ public enum PrototypingComponent: String, Codable, CaseIterable, Identifiable {
         case .arrow:
             return "箭头"
         case .aiNote:
-            return "AI标注"
+            return "注释"
         }
     }
 }
@@ -210,6 +243,8 @@ public enum PrototypingImportIntent: String, Codable {
     case importAsNewPages
     case sendToAI
     case exportOnly
+    case savePDF
+    case sharePDF
 }
 
 public struct PrototypingCanvasSize: Codable, Hashable {
@@ -225,8 +260,12 @@ public struct PrototypingCanvasSize: Codable, Hashable {
         CGSize(width: width, height: height)
     }
 
-    public static let phone = PrototypingCanvasSize(width: 390, height: 844)
-    public static let tablet = PrototypingCanvasSize(width: 834, height: 1194)
+    public static let phonePortrait = PrototypingCanvasSize(width: 390, height: 844)
+    public static let phoneLandscape = PrototypingCanvasSize(width: 844, height: 390)
+    public static let tabletPortrait = PrototypingCanvasSize(width: 834, height: 1194)
+    public static let tabletLandscape = PrototypingCanvasSize(width: 1194, height: 834)
+    public static let phone = phonePortrait
+    public static let tablet = tabletPortrait
     public static let web = PrototypingCanvasSize(width: 960, height: 540)
 }
 
@@ -254,22 +293,63 @@ public struct PrototypingElementFrame: Codable, Hashable {
     }
 }
 
+public struct PrototypingCanvasPoint: Codable, Hashable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public init(_ point: CGPoint) {
+        self.x = Double(point.x)
+        self.y = Double(point.y)
+    }
+
+    public var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+}
+
+public enum PrototypingAnnotationAnchor: String, Codable, CaseIterable, Identifiable {
+    case top
+    case bottom
+    case left
+    case right
+
+    public var id: String { rawValue }
+}
+
+public struct PrototypingAnnotationArrow: Codable, Hashable {
+    public var anchor: PrototypingAnnotationAnchor
+    public var target: PrototypingCanvasPoint
+
+    public init(anchor: PrototypingAnnotationAnchor, target: PrototypingCanvasPoint) {
+        self.anchor = anchor
+        self.target = target
+    }
+}
+
 public struct PrototypingCanvasElement: Codable, Identifiable, Hashable {
     public var id: String
     public var component: PrototypingComponent
     public var title: String?
     public var frame: PrototypingElementFrame
+    public var annotationArrow: PrototypingAnnotationArrow?
 
     public init(
         id: String = UUID().uuidString,
         component: PrototypingComponent,
         title: String? = nil,
-        frame: PrototypingElementFrame
+        frame: PrototypingElementFrame,
+        annotationArrow: PrototypingAnnotationArrow? = nil
     ) {
         self.id = id
         self.component = component
         self.title = title
         self.frame = frame
+        self.annotationArrow = annotationArrow
     }
 }
 
@@ -295,6 +375,37 @@ public struct PrototypingDraftRecord: Codable, Identifiable, Hashable {
     }
 }
 
+public struct PrototypingDraftBoard: Codable, Identifiable, Hashable {
+    public var id: String
+    public var kind: PrototypingDraftKind
+    public var template: PrototypingTemplate
+    public var device: PrototypingDeviceKind?
+    public var orientation: PrototypingDeviceOrientation?
+    public var canvasSize: PrototypingCanvasSize
+    public var enabledComponents: [PrototypingComponent]
+    public var elements: [PrototypingCanvasElement]
+
+    public init(
+        id: String,
+        kind: PrototypingDraftKind,
+        template: PrototypingTemplate,
+        device: PrototypingDeviceKind? = nil,
+        orientation: PrototypingDeviceOrientation? = nil,
+        canvasSize: PrototypingCanvasSize,
+        enabledComponents: [PrototypingComponent],
+        elements: [PrototypingCanvasElement]
+    ) {
+        self.id = id
+        self.kind = kind.normalized
+        self.template = template
+        self.device = device
+        self.orientation = orientation
+        self.canvasSize = canvasSize
+        self.enabledComponents = enabledComponents
+        self.elements = elements
+    }
+}
+
 public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public var id: String
     public var title: String
@@ -304,11 +415,14 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public var kind: PrototypingDraftKind
     public var template: PrototypingTemplate
     public var device: PrototypingDeviceKind
+    public var orientation: PrototypingDeviceOrientation
     public var canvasSize: PrototypingCanvasSize
     public var gridSize: Double
     public var enabledComponents: [PrototypingComponent]
     public var elements: [PrototypingCanvasElement]
     public var note: String
+    public var activeBoardID: String
+    public var boards: [String: PrototypingDraftBoard]
 
     public init(
         id: String = UUID().uuidString,
@@ -317,27 +431,42 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         updatedAt: Date = Date(),
         revisionID: String = UUID().uuidString,
         kind: PrototypingDraftKind = .appPage,
-        template: PrototypingTemplate = .blankPhone,
+        template: PrototypingTemplate = .blank,
         device: PrototypingDeviceKind = .phone,
-        canvasSize: PrototypingCanvasSize = .phone,
+        orientation: PrototypingDeviceOrientation = .portrait,
+        canvasSize: PrototypingCanvasSize? = nil,
         gridSize: Double = 12,
         enabledComponents: [PrototypingComponent] = [.title, .search, .card, .listRow, .bottomNavigation, .aiNote],
         elements: [PrototypingCanvasElement]? = nil,
-        note: String = "核心功能"
+        note: String = "核心功能",
+        activeBoardID: String? = nil,
+        boards: [String: PrototypingDraftBoard]? = nil
     ) {
+        let normalizedKind = kind.normalized
+        let resolvedCanvasSize = canvasSize ?? (normalizedKind == .webPage ? .web : device.canvasSize(for: orientation))
         self.id = id
         self.title = title
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.revisionID = revisionID
-        self.kind = kind
+        self.kind = normalizedKind
         self.template = template
         self.device = device
-        self.canvasSize = canvasSize
+        self.orientation = orientation
+        self.canvasSize = resolvedCanvasSize
         self.gridSize = gridSize
         self.enabledComponents = enabledComponents
-        self.elements = elements ?? PrototypingDraftDocument.defaultElements(for: template, canvasSize: canvasSize)
+        self.elements = elements ?? PrototypingDraftDocument.defaultElements(for: template, canvasSize: resolvedCanvasSize)
         self.note = note
+        self.activeBoardID = activeBoardID ?? PrototypingDraftDocument.boardID(
+            kind: normalizedKind,
+            device: device,
+            orientation: orientation
+        )
+        self.boards = boards ?? [:]
+        syncActiveBoardFromCompatibilityFields()
+        ensureStandardBoards()
+        loadActiveBoard()
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -349,11 +478,14 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         case kind
         case template
         case device
+        case orientation
         case canvasSize
         case gridSize
         case enabledComponents
         case elements
         case note
+        case activeBoardID
+        case boards
     }
 
     public init(from decoder: Decoder) throws {
@@ -363,16 +495,24 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         revisionID = try container.decode(String.self, forKey: .revisionID)
-        kind = try container.decode(PrototypingDraftKind.self, forKey: .kind)
+        kind = try container.decode(PrototypingDraftKind.self, forKey: .kind).normalized
         template = try container.decode(PrototypingTemplate.self, forKey: .template)
         device = try container.decodeIfPresent(PrototypingDeviceKind.self, forKey: .device)
             ?? (try container.decode(PrototypingCanvasSize.self, forKey: .canvasSize).width > 600 ? .tablet : .phone)
         canvasSize = try container.decode(PrototypingCanvasSize.self, forKey: .canvasSize)
+        orientation = try container.decodeIfPresent(PrototypingDeviceOrientation.self, forKey: .orientation)
+            ?? (canvasSize.width > canvasSize.height ? .landscape : .portrait)
         gridSize = try container.decodeIfPresent(Double.self, forKey: .gridSize) ?? 12
         enabledComponents = try container.decodeIfPresent([PrototypingComponent].self, forKey: .enabledComponents) ?? []
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? "核心功能"
         elements = try container.decodeIfPresent([PrototypingCanvasElement].self, forKey: .elements)
             ?? PrototypingDraftDocument.defaultElements(for: template, canvasSize: canvasSize)
+        activeBoardID = try container.decodeIfPresent(String.self, forKey: .activeBoardID)
+            ?? PrototypingDraftDocument.boardID(kind: kind, device: device, orientation: orientation)
+        boards = try container.decodeIfPresent([String: PrototypingDraftBoard].self, forKey: .boards) ?? [:]
+        syncActiveBoardFromCompatibilityFields()
+        ensureStandardBoards()
+        loadActiveBoard()
     }
 
     public static func defaultTitle(now: Date = Date()) -> String {
@@ -392,12 +532,147 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         )
     }
 
+    public static let webBoardID = "web"
+
+    public static func boardID(
+        kind: PrototypingDraftKind,
+        device: PrototypingDeviceKind,
+        orientation: PrototypingDeviceOrientation
+    ) -> String {
+        if kind.normalized == .webPage {
+            return webBoardID
+        }
+
+        return "app.\(device.rawValue).\(orientation.rawValue)"
+    }
+
+    public static var appBoardDescriptors: [(PrototypingDeviceKind, PrototypingDeviceOrientation)] {
+        [
+            (.phone, .portrait),
+            (.phone, .landscape),
+            (.tablet, .portrait),
+            (.tablet, .landscape)
+        ]
+    }
+
+    public mutating func activateBoard(
+        kind targetKind: PrototypingDraftKind,
+        device targetDevice: PrototypingDeviceKind,
+        orientation targetOrientation: PrototypingDeviceOrientation
+    ) {
+        syncActiveBoardFromCompatibilityFields()
+        kind = targetKind.normalized
+        device = targetDevice
+        orientation = targetOrientation
+        activeBoardID = PrototypingDraftDocument.boardID(
+            kind: kind,
+            device: device,
+            orientation: orientation
+        )
+        ensureStandardBoards()
+        loadActiveBoard()
+    }
+
+    public mutating func syncActiveBoardFromCompatibilityFields() {
+        kind = kind.normalized
+        canvasSize = kind == .webPage ? .web : device.canvasSize(for: orientation)
+        activeBoardID = PrototypingDraftDocument.boardID(
+            kind: kind,
+            device: device,
+            orientation: orientation
+        )
+        boards[activeBoardID] = PrototypingDraftBoard(
+            id: activeBoardID,
+            kind: kind,
+            template: template,
+            device: kind == .webPage ? nil : device,
+            orientation: kind == .webPage ? nil : orientation,
+            canvasSize: canvasSize,
+            enabledComponents: enabledComponents,
+            elements: elements
+        )
+    }
+
+    public mutating func ensureStandardBoards() {
+        for (device, orientation) in PrototypingDraftDocument.appBoardDescriptors {
+            let id = PrototypingDraftDocument.boardID(kind: .appPage, device: device, orientation: orientation)
+            if boards[id] == nil {
+                let size = device.canvasSize(for: orientation)
+                boards[id] = PrototypingDraftDocument.defaultBoard(
+                    id: id,
+                    kind: .appPage,
+                    template: .blank,
+                    device: device,
+                    orientation: orientation,
+                    canvasSize: size
+                )
+            }
+        }
+
+        if boards[PrototypingDraftDocument.webBoardID] == nil {
+            boards[PrototypingDraftDocument.webBoardID] = PrototypingDraftDocument.defaultBoard(
+                id: PrototypingDraftDocument.webBoardID,
+                kind: .webPage,
+                template: .blank,
+                device: nil,
+                orientation: nil,
+                canvasSize: .web
+            )
+        }
+    }
+
+    public mutating func loadActiveBoard() {
+        guard let board = boards[activeBoardID] else { return }
+
+        kind = board.kind.normalized
+        template = board.template
+        device = board.device ?? device
+        orientation = board.orientation ?? orientation
+        canvasSize = board.canvasSize
+        enabledComponents = board.enabledComponents
+        elements = board.elements
+    }
+
+    public func exportDocumentsForCurrentKind(boardIDs selectedBoardIDs: [String]? = nil) -> [PrototypingDraftDocument] {
+        var exportSource = self
+        exportSource.syncActiveBoardFromCompatibilityFields()
+        exportSource.ensureStandardBoards()
+
+        let allowedBoardIDs: [String]
+        if exportSource.kind == .webPage {
+            allowedBoardIDs = [PrototypingDraftDocument.webBoardID]
+        } else {
+            allowedBoardIDs = PrototypingDraftDocument.appBoardDescriptors.map {
+                PrototypingDraftDocument.boardID(kind: .appPage, device: $0.0, orientation: $0.1)
+            }
+        }
+
+        let boardIDs = selectedBoardIDs
+            .map { selected in
+                selected.filter { allowedBoardIDs.contains($0) }
+            }
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? allowedBoardIDs
+
+        return boardIDs.compactMap { boardID in
+            guard exportSource.boards[boardID]?.elements.isEmpty == false else { return nil }
+            var document = exportSource
+            document.activeBoardID = boardID
+            document.loadActiveBoard()
+            return document
+        }
+    }
+
     public static func defaultElements(
         for template: PrototypingTemplate,
         canvasSize: PrototypingCanvasSize
     ) -> [PrototypingCanvasElement] {
         let size = canvasSize.cgSize
         let isWeb = template.kind == .webPage
+
+        if template == .blank || template == .blankPhone || template == .blankTablet {
+            return []
+        }
 
         if isWeb {
             switch template {
@@ -545,7 +820,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                 element(.table, x: 216, y: 672, width: 586, height: 310),
                 element(.aiNote, x: 668, y: 132, width: 112, height: 38)
             ]
-        case .blankPhone, .blankTablet, .list, .webHome, .dashboard, .landing, .pricing:
+        case .blank, .blankPhone, .blankTablet, .list, .webHome, .dashboard, .landing, .pricing:
             baseElements = [
                 element(.title, x: 34, y: 36, width: 220, height: 34),
                 element(.search, x: 34, y: 96, width: 284, height: 44),
@@ -707,6 +982,34 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             title: component.title,
             frame: PrototypingElementFrame(x: x, y: y, width: width, height: height)
         )
+    }
+
+    private static func defaultBoard(
+        id: String,
+        kind: PrototypingDraftKind,
+        template: PrototypingTemplate,
+        device: PrototypingDeviceKind?,
+        orientation: PrototypingDeviceOrientation?,
+        canvasSize: PrototypingCanvasSize
+    ) -> PrototypingDraftBoard {
+        PrototypingDraftBoard(
+            id: id,
+            kind: kind,
+            template: template,
+            device: device,
+            orientation: orientation,
+            canvasSize: canvasSize,
+            enabledComponents: defaultEnabledComponents(for: kind),
+            elements: PrototypingDraftDocument.defaultElements(for: template, canvasSize: canvasSize)
+        )
+    }
+
+    private static func defaultEnabledComponents(for kind: PrototypingDraftKind) -> [PrototypingComponent] {
+        if kind.normalized == .webPage {
+            return [.title, .subtitle, .button, .topNavigation, .card, .chart, .table, .tag, .aiNote]
+        }
+
+        return [.title, .button, .input, .search, .card, .listRow, .imagePlaceholder, .bottomNavigation, .aiNote]
     }
 }
 

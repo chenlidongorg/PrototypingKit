@@ -1,6 +1,17 @@
 import Foundation
 import UIKit
 
+public enum PrototypingDraftStoreError: LocalizedError {
+    case emptyPDFExport
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyPDFExport:
+            return "当前草稿没有可导出的组件"
+        }
+    }
+}
+
 @MainActor
 public final class PrototypingDraftStore: ObservableObject {
     @Published public private(set) var records: [PrototypingDraftRecord] = []
@@ -65,6 +76,8 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func update(_ transform: (inout PrototypingDraftDocument) -> Void) {
         transform(&currentDocument)
+        currentDocument.syncActiveBoardFromCompatibilityFields()
+        currentDocument.ensureStandardBoards()
         currentDocument.updatedAt = Date()
         currentDocument.revisionID = UUID().uuidString
         saveCurrentDocument()
@@ -72,11 +85,15 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func applyTemplate(_ template: PrototypingTemplate) {
         update { document in
-            let device = template.preferredDevice ?? (document.kind == .webPage ? .phone : document.device)
+            let targetKind: PrototypingDraftKind = template.kind == .webPage ? .webPage : document.kind.normalized
+            let targetDevice = template.preferredDevice ?? document.device
+            let targetOrientation = document.orientation
+            document.activateBoard(kind: targetKind, device: targetDevice, orientation: targetOrientation)
             document.template = template
-            document.kind = template.kind
-            document.device = device
-            document.canvasSize = template.kind == .webPage ? .web : device.canvasSize
+            document.kind = targetKind
+            document.device = targetDevice
+            document.orientation = targetOrientation
+            document.canvasSize = targetKind == .webPage ? .web : targetDevice.canvasSize(for: targetOrientation)
             document.elements = PrototypingDraftDocument.defaultElements(
                 for: template,
                 canvasSize: document.canvasSize
@@ -87,55 +104,25 @@ public final class PrototypingDraftStore: ObservableObject {
 
     public func applyKind(_ kind: PrototypingDraftKind) {
         update { document in
-            let template: PrototypingTemplate = kind == .webPage ? .webHome : .blankPhone
-            let device: PrototypingDeviceKind = kind == .webPage ? document.device : (document.kind == .webPage ? .phone : document.device)
-            document.kind = kind
-            document.template = template
-            document.device = device
-            document.canvasSize = kind == .webPage ? .web : device.canvasSize
-            document.elements = PrototypingDraftDocument.defaultElements(
-                for: template,
-                canvasSize: document.canvasSize
+            document.activateBoard(
+                kind: kind.normalized,
+                device: document.device,
+                orientation: document.orientation
             )
-            
-            if kind == .flowNote {
-                document.elements.append(
-                    PrototypingCanvasElement(
-                        component: .arrow,
-                        title: PrototypingComponent.arrow.title,
-                        frame: PrototypingElementFrame(x: 120, y: 610, width: 150, height: 42)
-                    )
-                )
-            } else if kind == .deviceShowcase {
-                document.elements.append(
-                    PrototypingCanvasElement(
-                        component: .imagePlaceholder,
-                        title: PrototypingComponent.imagePlaceholder.title,
-                        frame: PrototypingElementFrame(x: 74, y: 588, width: 242, height: 140)
-                    )
-                )
-            }
-            
-            document.enabledComponents = uniqueComponents(in: document.elements)
         }
     }
 
     public func applyDevice(_ device: PrototypingDeviceKind) {
         guard currentDocument.kind != .webPage else { return }
         update { document in
-            let oldSize = document.canvasSize.cgSize
-            let newSize = device.canvasSize.cgSize
-            document.device = device
-            document.canvasSize = device.canvasSize
-            document.elements = document.elements.map { element in
-                var copy = element
-                copy.frame = snappedFrame(
-                    scaledFrame(copy.frame, from: oldSize, to: newSize),
-                    canvasSize: newSize,
-                    gridSize: CGFloat(document.gridSize)
-                )
-                return copy
-            }
+            document.activateBoard(kind: .appPage, device: device, orientation: document.orientation)
+        }
+    }
+
+    public func applyOrientation(_ orientation: PrototypingDeviceOrientation) {
+        guard currentDocument.kind != .webPage else { return }
+        update { document in
+            document.activateBoard(kind: .appPage, device: document.device, orientation: orientation)
         }
     }
 
@@ -209,6 +196,37 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
+    public func updateAnnotationArrow(
+        id: String,
+        anchor: PrototypingAnnotationAnchor,
+        target: CGPoint?,
+        persist: Bool
+    ) {
+        guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }),
+              currentDocument.elements[index].component == .aiNote
+        else { return }
+
+        var document = currentDocument
+        if let target {
+            document.elements[index].annotationArrow = PrototypingAnnotationArrow(
+                anchor: anchor,
+                target: PrototypingCanvasPoint(target)
+            )
+        } else {
+            document.elements[index].annotationArrow = nil
+        }
+
+        if persist {
+            document.updatedAt = Date()
+            document.revisionID = UUID().uuidString
+        }
+
+        currentDocument = document
+        if persist {
+            saveCurrentDocument()
+        }
+    }
+
     public func deleteElement(id: String) {
         update { document in
             document.elements.removeAll { $0.id == id }
@@ -223,10 +241,17 @@ public final class PrototypingDraftStore: ObservableObject {
         return .image(image, metadata: metadata)
     }
 
-    public func exportPDF(recommendedIntent: PrototypingImportIntent = .importAsNewPages) throws -> PrototypingExportResult {
+    public func exportPDF(
+        recommendedIntent: PrototypingImportIntent = .importAsNewPages,
+        boardIDs: [String]? = nil
+    ) throws -> PrototypingExportResult {
         saveCurrentDocument()
+        let exportDocuments = currentDocument.exportDocumentsForCurrentKind(boardIDs: boardIDs)
+        guard !exportDocuments.isEmpty else {
+            throw PrototypingDraftStoreError.emptyPDFExport
+        }
         let url = try PrototypingRenderer.renderPDF(
-            document: currentDocument,
+            documents: exportDocuments,
             destinationURL: exportFolder(id: currentDocument.id)
                 .appendingPathComponent("\(currentDocument.revisionID).pdf")
         )
@@ -271,6 +296,8 @@ public final class PrototypingDraftStore: ObservableObject {
 
     private func saveCurrentDocument() {
         ensureFolders()
+        currentDocument.syncActiveBoardFromCompatibilityFields()
+        currentDocument.ensureStandardBoards()
         let folder = draftFolder(id: currentDocument.id)
         try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
         try? fileManager.createDirectory(at: exportFolder(id: currentDocument.id), withIntermediateDirectories: true)
