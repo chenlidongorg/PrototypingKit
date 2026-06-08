@@ -34,6 +34,7 @@ struct PrototypingEditableDraftCanvas: View {
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
     let onMoveElements: ([String: PrototypingElementFrame], Bool) -> Void
     let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
+    let onUpdateAnnotationText: (String, String, Bool) -> Void
     let onDelete: (String) -> Void
 
     var body: some View {
@@ -56,6 +57,7 @@ struct PrototypingEditableDraftCanvas: View {
                 onMove: onMove,
                 onMoveElements: onMoveElements,
                 onUpdateAnnotationArrow: onUpdateAnnotationArrow,
+                onUpdateAnnotationText: onUpdateAnnotationText,
                 onDelete: onDelete
             )
         }
@@ -143,6 +145,17 @@ private func clampedPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
     )
 }
 
+private func annotationText(for element: PrototypingCanvasElement, fallback note: String) -> String {
+    let title = element.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let fallbackText = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if !title.isEmpty && title != PrototypingComponent.aiNote.title {
+        return title
+    }
+
+    return fallbackText.isEmpty ? "核心功能" : fallbackText
+}
+
 private struct PrototypingCanvasElementsLayer: View {
     let document: PrototypingDraftDocument
     let selectedElementIDs: Set<String>
@@ -186,7 +199,7 @@ private struct PrototypingElementContainer: View {
             .overlay(
                 SelectionChrome(
                     isSelected: isSelected,
-                    showsResizeHandles: isSingleSelected,
+                    showsResizeHandles: isSingleSelected && element.component != .aiNote,
                     showsAnnotationHandles: isSingleSelected && element.component == .aiNote
                 )
             )
@@ -303,6 +316,103 @@ private struct SelectionChrome: View {
     }
 }
 
+private struct AnnotationInlineEditor: View {
+    let element: PrototypingCanvasElement
+    let text: String
+    let isEditing: Bool
+    let onEdit: () -> Void
+    let onTextChange: (String) -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        let rect = element.frame.cgRect
+
+        ZStack(alignment: .topLeading) {
+            if isEditing {
+                AnnotationTextView(
+                    text: Binding(
+                        get: { text },
+                        set: { onTextChange($0) }
+                    ),
+                    isFirstResponder: true
+                )
+                .frame(width: rect.width, height: rect.height)
+                .background(Color.yellow.opacity(0.94))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.orange.opacity(0.45), lineWidth: 1)
+                )
+                .position(x: rect.midX, y: rect.midY)
+            }
+
+            Button(action: isEditing ? onDone : onEdit) {
+                Text(isEditing ? "完成" : "编辑")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(Color.blue.opacity(0.88))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .position(
+                x: max(34, rect.maxX - 28),
+                y: max(13, rect.minY - 15)
+            )
+        }
+    }
+}
+
+private struct AnnotationTextView: UIViewRepresentable {
+    @Binding var text: String
+    let isFirstResponder: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.font = .systemFont(ofSize: 14, weight: .semibold)
+        textView.textColor = UIColor.black.withAlphaComponent(0.82)
+        textView.textAlignment = .center
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.isScrollEnabled = false
+        textView.returnKeyType = .default
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+
+        if isFirstResponder && !uiView.isFirstResponder {
+            DispatchQueue.main.async {
+                uiView.becomeFirstResponder()
+            }
+        } else if !isFirstResponder && uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            text.wrappedValue = textView.text
+        }
+    }
+}
+
 private struct SnapGuideOverlay: View {
     let document: PrototypingDraftDocument
     let selectedElementIDs: Set<String>
@@ -368,6 +478,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
     let onMoveElements: ([String: PrototypingElementFrame], Bool) -> Void
     let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
+    let onUpdateAnnotationText: (String, String, Bool) -> Void
     let onDelete: (String) -> Void
 
     @State private var draggingElementID: String?
@@ -375,6 +486,8 @@ private struct PrototypingCanvasInteractionOverlay: View {
     @State private var draggingAnnotation: AnnotationDrag?
     @State private var draggingResize: ResizeDrag?
     @State private var draggingGroup: GroupDrag?
+    @State private var editingAnnotationID: String?
+    @State private var editingAnnotationText = ""
 
     private struct AnnotationDrag {
         let elementID: String
@@ -393,159 +506,207 @@ private struct PrototypingCanvasInteractionOverlay: View {
     }
 
     var body: some View {
-        PrototypingCanvasGestureView(
-            canBeginPan: { point in
-                hitAnnotationControl(at: point) != nil
-                    || hitResizeControl(at: point) != nil
-                    || hitElement(at: point) != nil
-            },
-            onSingleTap: { point in
-                if let annotationControl = hitAnnotationControl(at: point) {
-                    onSelect(annotationControl.elementID)
-                    return
-                }
+        ZStack(alignment: .topLeading) {
+            PrototypingCanvasGestureView(
+                canBeginPan: { point in
+                    hitAnnotationControl(at: point) != nil
+                        || hitResizeControl(at: point) != nil
+                        || hitElement(at: point) != nil
+                },
+                onSingleTap: handleSingleTap,
+                onDoubleTap: { point in
+                    guard let element = hitElement(at: point) else { return }
+                    onDelete(element.id)
+                },
+                onPanBegan: handlePanBegan,
+                onPanChanged: handlePanChanged,
+                onPanEnded: handlePanEnded
+            )
 
-                if let resizeControl = hitResizeControl(at: point) {
-                    onSelect(resizeControl.elementID)
-                    return
-                }
-
-                guard let element = hitElement(at: point) else {
-                    onDeselect()
-                    return
-                }
-
-                if isMultiSelectionEnabled {
-                    onToggleSelection(element.id)
-                } else {
-                    onSelect(element.id)
-                }
-            },
-            onDoubleTap: { point in
-                guard let element = hitElement(at: point) else { return }
-                onDelete(element.id)
-            },
-            onPanBegan: { point in
-                if let annotationControl = hitAnnotationControl(at: point) {
-                    draggingAnnotation = annotationControl
-                    draggingResize = nil
-                    draggingGroup = nil
-                    draggingElementID = nil
-                    draggingStartFrame = nil
-                    onSelect(annotationControl.elementID)
-                    return
-                }
-
-                if let resizeControl = hitResizeControl(at: point) {
-                    draggingResize = resizeControl
-                    draggingAnnotation = nil
-                    draggingGroup = nil
-                    draggingElementID = nil
-                    draggingStartFrame = nil
-                    onSelect(resizeControl.elementID)
-                    return
-                }
-
-                guard let element = hitElement(at: point) else {
-                    draggingElementID = nil
-                    draggingStartFrame = nil
-                    draggingAnnotation = nil
-                    draggingResize = nil
-                    draggingGroup = nil
-                    return
-                }
-
-                let groupStartFrames = selectedGroupStartFrames(for: element)
-                if groupStartFrames.count > 1 {
-                    draggingGroup = GroupDrag(startFrames: groupStartFrames)
-                    draggingElementID = nil
-                    draggingStartFrame = nil
-                    draggingAnnotation = nil
-                    draggingResize = nil
-                    return
-                }
-
-                draggingElementID = element.id
-                draggingStartFrame = element.frame
-                draggingAnnotation = nil
-                draggingResize = nil
-                draggingGroup = nil
-                onSelect(element.id)
-            },
-            onPanChanged: { point, translation in
-                if let draggingAnnotation {
-                    onUpdateAnnotationArrow(
-                        draggingAnnotation.elementID,
-                        draggingAnnotation.anchor,
-                        annotationTarget(at: point, for: draggingAnnotation),
-                        false
-                    )
-                    return
-                }
-
-                if let draggingResize {
-                    let frame = resizedFrame(
-                        from: draggingResize.startFrame,
-                        edge: draggingResize.edge,
-                        translation: translation,
-                        component: draggingResize.component
-                    )
-                    onMove(draggingResize.elementID, frame, false)
-                    return
-                }
-
-                if let draggingGroup {
-                    onMoveElements(
-                        movedFrames(from: draggingGroup.startFrames, by: translation),
-                        false
-                    )
-                    return
-                }
-
-                guard let draggingElementID, let draggingStartFrame else { return }
-                let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
-                onMove(draggingElementID, frame, false)
-            },
-            onPanEnded: { point, translation in
-                if let draggingAnnotation {
-                    onUpdateAnnotationArrow(
-                        draggingAnnotation.elementID,
-                        draggingAnnotation.anchor,
-                        annotationTarget(at: point, for: draggingAnnotation),
-                        true
-                    )
-                    self.draggingAnnotation = nil
-                    return
-                }
-
-                if let draggingResize {
-                    let frame = resizedFrame(
-                        from: draggingResize.startFrame,
-                        edge: draggingResize.edge,
-                        translation: translation,
-                        component: draggingResize.component
-                    )
-                    onMove(draggingResize.elementID, frame, true)
-                    self.draggingResize = nil
-                    return
-                }
-
-                if let draggingGroup {
-                    onMoveElements(
-                        movedFrames(from: draggingGroup.startFrames, by: translation),
-                        true
-                    )
-                    self.draggingGroup = nil
-                    return
-                }
-
-                guard let draggingElementID, let draggingStartFrame else { return }
-                let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
-                onMove(draggingElementID, frame, true)
-                self.draggingElementID = nil
-                self.draggingStartFrame = nil
+            if let selectedAnnotation {
+                AnnotationInlineEditor(
+                    element: selectedAnnotation,
+                    text: editingAnnotationID == selectedAnnotation.id
+                        ? editingAnnotationText
+                        : annotationText(for: selectedAnnotation, fallback: document.note),
+                    isEditing: editingAnnotationID == selectedAnnotation.id,
+                    onEdit: {
+                        editingAnnotationID = selectedAnnotation.id
+                        editingAnnotationText = annotationText(for: selectedAnnotation, fallback: document.note)
+                        onSelect(selectedAnnotation.id)
+                    },
+                    onTextChange: { text in
+                        editingAnnotationText = text
+                        onUpdateAnnotationText(selectedAnnotation.id, text, false)
+                    },
+                    onDone: {
+                        onUpdateAnnotationText(selectedAnnotation.id, editingAnnotationText, true)
+                        editingAnnotationID = nil
+                        editingAnnotationText = ""
+                    }
+                )
             }
-        )
+        }
+    }
+
+    private func handleSingleTap(_ point: CGPoint) {
+        if let annotationControl = hitAnnotationControl(at: point) {
+            clearAnnotationEditing(keeping: annotationControl.elementID)
+            onSelect(annotationControl.elementID)
+            return
+        }
+
+        if let resizeControl = hitResizeControl(at: point) {
+            clearAnnotationEditing(keeping: resizeControl.elementID)
+            onSelect(resizeControl.elementID)
+            return
+        }
+
+        guard let element = hitElement(at: point) else {
+            clearAnnotationEditing()
+            onDeselect()
+            return
+        }
+
+        clearAnnotationEditing(keeping: element.id)
+        if isMultiSelectionEnabled {
+            onToggleSelection(element.id)
+        } else {
+            onSelect(element.id)
+        }
+    }
+
+    private func handlePanBegan(_ point: CGPoint) {
+        if let annotationControl = hitAnnotationControl(at: point) {
+            clearAnnotationEditing(keeping: annotationControl.elementID)
+            draggingAnnotation = annotationControl
+            draggingResize = nil
+            draggingGroup = nil
+            draggingElementID = nil
+            draggingStartFrame = nil
+            onSelect(annotationControl.elementID)
+            return
+        }
+
+        if let resizeControl = hitResizeControl(at: point) {
+            clearAnnotationEditing(keeping: resizeControl.elementID)
+            draggingResize = resizeControl
+            draggingAnnotation = nil
+            draggingGroup = nil
+            draggingElementID = nil
+            draggingStartFrame = nil
+            onSelect(resizeControl.elementID)
+            return
+        }
+
+        guard let element = hitElement(at: point) else {
+            clearAnnotationEditing()
+            draggingElementID = nil
+            draggingStartFrame = nil
+            draggingAnnotation = nil
+            draggingResize = nil
+            draggingGroup = nil
+            return
+        }
+
+        clearAnnotationEditing(keeping: element.id)
+        let groupStartFrames = selectedGroupStartFrames(for: element)
+        if groupStartFrames.count > 1 {
+            draggingGroup = GroupDrag(startFrames: groupStartFrames)
+            draggingElementID = nil
+            draggingStartFrame = nil
+            draggingAnnotation = nil
+            draggingResize = nil
+            return
+        }
+
+        draggingElementID = element.id
+        draggingStartFrame = element.frame
+        draggingAnnotation = nil
+        draggingResize = nil
+        draggingGroup = nil
+        onSelect(element.id)
+    }
+
+    private func handlePanChanged(_ point: CGPoint, translation: CGSize) {
+        if let draggingAnnotation {
+            onUpdateAnnotationArrow(
+                draggingAnnotation.elementID,
+                draggingAnnotation.anchor,
+                annotationTarget(at: point, for: draggingAnnotation),
+                false
+            )
+            return
+        }
+
+        if let draggingResize {
+            let frame = resizedFrame(
+                from: draggingResize.startFrame,
+                edge: draggingResize.edge,
+                translation: translation,
+                component: draggingResize.component
+            )
+            onMove(draggingResize.elementID, frame, false)
+            return
+        }
+
+        if let draggingGroup {
+            onMoveElements(
+                movedFrames(from: draggingGroup.startFrames, by: translation),
+                false
+            )
+            return
+        }
+
+        guard let draggingElementID, let draggingStartFrame else { return }
+        let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
+        onMove(draggingElementID, frame, false)
+    }
+
+    private func handlePanEnded(_ point: CGPoint, translation: CGSize) {
+        if let draggingAnnotation {
+            onUpdateAnnotationArrow(
+                draggingAnnotation.elementID,
+                draggingAnnotation.anchor,
+                annotationTarget(at: point, for: draggingAnnotation),
+                true
+            )
+            self.draggingAnnotation = nil
+            return
+        }
+
+        if let draggingResize {
+            let frame = resizedFrame(
+                from: draggingResize.startFrame,
+                edge: draggingResize.edge,
+                translation: translation,
+                component: draggingResize.component
+            )
+            onMove(draggingResize.elementID, frame, true)
+            self.draggingResize = nil
+            return
+        }
+
+        if let draggingGroup {
+            onMoveElements(
+                movedFrames(from: draggingGroup.startFrames, by: translation),
+                true
+            )
+            self.draggingGroup = nil
+            return
+        }
+
+        guard let draggingElementID, let draggingStartFrame else { return }
+        let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
+        onMove(draggingElementID, frame, true)
+        self.draggingElementID = nil
+        self.draggingStartFrame = nil
+    }
+
+    private func clearAnnotationEditing(keeping elementID: String? = nil) {
+        guard let editingAnnotationID, editingAnnotationID != elementID else { return }
+        self.editingAnnotationID = nil
+        self.editingAnnotationText = ""
     }
 
     private func hitAnnotationControl(at point: CGPoint) -> AnnotationDrag? {
@@ -571,6 +732,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
     private func hitResizeControl(at point: CGPoint) -> ResizeDrag? {
         guard selectedElementIDs.count == 1 else { return nil }
         guard let selectedElement = selectedElement else { return nil }
+        guard selectedElement.component != .aiNote else { return nil }
         let rect = selectedElement.frame.cgRect
 
         for edge in PrototypingResizeEdge.allCases {
@@ -1159,20 +1321,16 @@ private struct PrototypingElementView: View {
     }
 
     private func noteView(_ size: CGSize) -> some View {
-        let fontSize = min(15, max(10, min(size.height * 0.34, size.width * 0.12)))
-        let lineHeight = max(15, fontSize + 5)
-        let lineLimit = max(1, min(5, Int(size.height / lineHeight)))
-        let horizontalPadding = min(14, max(8, size.width * 0.1))
-        let verticalPadding = min(9, max(6, size.height * 0.16))
+        let text = annotationText(for: element, fallback: note)
 
-        return Text(note.isEmpty ? "核心功能" : note)
-            .font(.system(size: fontSize, weight: .semibold))
+        return Text(text)
+            .font(.system(size: 14, weight: .semibold))
             .foregroundColor(.black.opacity(0.82))
             .multilineTextAlignment(.center)
-            .lineLimit(lineLimit)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.yellow.opacity(0.86))
             .clipShape(RoundedRectangle(cornerRadius: 10))

@@ -242,6 +242,9 @@ public struct PrototypingKitView: View {
                             onUpdateAnnotationArrow: { id, anchor, target, persist in
                                 store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
                             },
+                            onUpdateAnnotationText: { id, text, persist in
+                                store.updateAnnotationText(id: id, text: text, persist: persist)
+                            },
                             onDelete: deleteElement
                         )
                         .frame(width: canvasSize.width, height: canvasSize.height)
@@ -577,22 +580,6 @@ public struct PrototypingKitView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    sectionTitle("注释")
-                    TextField("例如：核心功能", text: noteBinding)
-                        .font(.system(size: 14))
-                        .foregroundColor(PrototypingKitColors.ink)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .background(PrototypingKitColors.panel)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(PrototypingKitColors.separator, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-
                 VStack(alignment: .leading, spacing: 10) {
                     DisclosureHeader(title: "网格", isExpanded: isGridSectionVisible) {
                         isGridSectionVisible.toggle()
@@ -701,15 +688,6 @@ public struct PrototypingKitView: View {
                 store.update { document in
                     document.title = value.isEmpty ? PrototypingDraftDocument.defaultTitle() : value
                 }
-            }
-        )
-    }
-
-    private var noteBinding: Binding<String> {
-        Binding(
-            get: { store.currentDocument.note },
-            set: { value in
-                store.updateNote(value)
             }
         )
     }

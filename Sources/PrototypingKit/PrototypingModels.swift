@@ -691,8 +691,12 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         elements = elements.map { element in
             guard element.component == .aiNote else { return element }
             var copy = element
+            let trimmedTitle = element.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let annotationText = trimmedTitle.isEmpty || trimmedTitle == PrototypingComponent.aiNote.title
+                ? note
+                : trimmedTitle
             copy.frame = PrototypingDraftDocument.annotationFrame(
-                for: note,
+                for: annotationText,
                 existingFrame: element.frame,
                 canvasSize: size
             )
@@ -1140,11 +1144,11 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         let characterCount = max(4, text.count)
         let minimum = minimumSize(for: .aiNote)
         let maximum = maximumSize(for: .aiNote, canvasSize: canvasSize)
-        let preferredWidth = CGFloat(76 + min(characterCount, 26) * 7)
+        let preferredWidth = CGFloat(54 + min(characterCount, 24) * 8)
         let width = min(maximum.width, max(minimum.width, preferredWidth))
-        let charactersPerLine = max(6, Int((width - 22) / 7))
+        let charactersPerLine = max(6, Int((width - 28) / 8))
         let lineCount = max(1, Int(ceil(Double(characterCount) / Double(charactersPerLine))))
-        let preferredHeight = CGFloat(20 + min(lineCount, 5) * 18)
+        let preferredHeight = CGFloat(20 + min(lineCount, 6) * 20)
         let height = min(maximum.height, max(minimum.height, preferredHeight))
 
         return CGSize(width: width, height: height)

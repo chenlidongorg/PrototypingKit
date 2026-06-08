@@ -137,6 +137,32 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
+    public func updateAnnotationText(id: String, text: String, persist: Bool) {
+        guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }),
+              currentDocument.elements[index].component == .aiNote
+        else { return }
+
+        var document = currentDocument
+        let resolvedText = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "核心功能" : text
+        document.note = resolvedText
+        document.elements[index].title = resolvedText
+        document.elements[index].frame = PrototypingDraftDocument.annotationFrame(
+            for: resolvedText,
+            existingFrame: document.elements[index].frame,
+            canvasSize: document.canvasSize.cgSize
+        )
+
+        if persist {
+            document.updatedAt = Date()
+            document.revisionID = UUID().uuidString
+        }
+
+        currentDocument = document
+        if persist {
+            saveCurrentDocument()
+        }
+    }
+
     public func updateGridSize(_ gridSize: Double) {
         update { document in
             let nextGridSize = max(8, min(32, gridSize))
@@ -175,7 +201,7 @@ public final class PrototypingDraftStore: ObservableObject {
             document.elements.append(
                 PrototypingCanvasElement(
                     component: component,
-                    title: component.title,
+                    title: component == .aiNote ? document.note : component.title,
                     frame: frame
                 )
             )
