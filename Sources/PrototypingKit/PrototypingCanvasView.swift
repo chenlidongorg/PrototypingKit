@@ -101,19 +101,7 @@ private func annotationAnchorPoint(in rect: CGRect, anchor: PrototypingAnnotatio
 }
 
 private func annotationControlPoint(in rect: CGRect, anchor: PrototypingAnnotationAnchor) -> CGPoint {
-    let point = annotationAnchorPoint(in: rect, anchor: anchor)
-    let offset: CGFloat = 18
-
-    switch anchor {
-    case .top:
-        return CGPoint(x: point.x, y: point.y - offset)
-    case .bottom:
-        return CGPoint(x: point.x, y: point.y + offset)
-    case .left:
-        return CGPoint(x: point.x - offset, y: point.y)
-    case .right:
-        return CGPoint(x: point.x + offset, y: point.y)
-    }
+    annotationAnchorPoint(in: rect, anchor: anchor)
 }
 
 private enum PrototypingResizeEdge: String, CaseIterable, Identifiable {
@@ -379,9 +367,15 @@ private struct AnnotationTextView: UIViewRepresentable {
         textView.font = .systemFont(ofSize: 14, weight: .semibold)
         textView.textColor = UIColor.black.withAlphaComponent(0.82)
         textView.textAlignment = .center
-        textView.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        textView.textContainerInset = UIEdgeInsets(top: 9, left: 14, bottom: 9, right: 14)
         textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.textContainer.widthTracksTextView = true
+        textView.textContainer.maximumNumberOfLines = 0
         textView.isScrollEnabled = false
+        textView.alwaysBounceHorizontal = false
+        textView.showsHorizontalScrollIndicator = false
+        textView.showsVerticalScrollIndicator = false
         textView.returnKeyType = .default
         return textView
     }
@@ -1329,8 +1323,8 @@ private struct PrototypingElementView: View {
             .multilineTextAlignment(.center)
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.yellow.opacity(0.86))
             .clipShape(RoundedRectangle(cornerRadius: 10))

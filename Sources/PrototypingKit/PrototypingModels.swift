@@ -1109,8 +1109,8 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     ) -> CGSize {
         switch component {
         case .aiNote:
-            let maxWidth = min(max(180, canvasSize.width * 0.72), canvasSize.width - 24)
-            let maxHeight = min(150, canvasSize.height - 24)
+            let maxWidth = min(max(200, canvasSize.width * 0.72), canvasSize.width - 24)
+            let maxHeight = min(220, canvasSize.height - 24)
             return CGSize(width: maxWidth, height: maxHeight)
         default:
             return CGSize(width: canvasSize.width, height: canvasSize.height)
@@ -1141,14 +1141,28 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         canvasSize: CGSize
     ) -> CGSize {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let characterCount = max(4, text.count)
+        let resolvedText = text.isEmpty ? "核心功能" : text
         let minimum = minimumSize(for: .aiNote)
         let maximum = maximumSize(for: .aiNote, canvasSize: canvasSize)
-        let preferredWidth = CGFloat(54 + min(characterCount, 24) * 8)
-        let width = min(maximum.width, max(minimum.width, preferredWidth))
-        let charactersPerLine = max(6, Int((width - 28) / 8))
-        let lineCount = max(1, Int(ceil(Double(characterCount) / Double(charactersPerLine))))
-        let preferredHeight = CGFloat(20 + min(lineCount, 6) * 20)
+        let font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let horizontalPadding: CGFloat = 28
+        let verticalPadding: CGFloat = 18
+        let lineWidthLimit = min(maximum.width, max(minimum.width, min(240, canvasSize.width - 24)))
+        let longestLineWidth = resolvedText
+            .components(separatedBy: .newlines)
+            .map { ($0 as NSString).size(withAttributes: attributes).width }
+            .max() ?? 0
+        let preferredWidth = ceil(longestLineWidth + horizontalPadding)
+        let width = min(lineWidthLimit, max(minimum.width, preferredWidth))
+        let boundingSize = CGSize(width: max(1, width - horizontalPadding), height: .greatestFiniteMagnitude)
+        let textBounds = (resolvedText as NSString).boundingRect(
+            with: boundingSize,
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes,
+            context: nil
+        )
+        let preferredHeight = ceil(textBounds.height + verticalPadding)
         let height = min(maximum.height, max(minimum.height, preferredHeight))
 
         return CGSize(width: width, height: height)
