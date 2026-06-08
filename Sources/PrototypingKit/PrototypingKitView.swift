@@ -213,42 +213,63 @@ public struct PrototypingKitView: View {
         let canvasSize = store.currentDocument.canvasSize.cgSize
         let fitScale = stageFitScale(availableSize: availableSize)
         let scale = stageZoomMode == "fit" ? fitScale : clampStageZoom(CGFloat(manualStageZoom))
+        let scaledCanvasSize = CGSize(width: canvasSize.width * scale, height: canvasSize.height * scale)
         let contentSize = stageContentSize(
             availableSize: availableSize,
             canvasSize: canvasSize,
             scale: scale
         )
+        let centerResetID = stageCenterResetID(scale: scale, canvasSize: canvasSize, availableSize: availableSize)
 
         return ZStack(alignment: .topTrailing) {
-            ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                ZStack {
-                    PrototypingEditableDraftCanvas(
-                        document: store.currentDocument,
-                        selectedElementIDs: selectedElementIDs,
-                        isMultiSelectionEnabled: isMultiSelectionEnabled,
-                        onSelect: selectElement,
-                        onToggleSelection: toggleElementSelection,
-                        onDeselect: deselectElement,
-                        onMove: { id, frame, persist in
-                            let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
-                            store.moveElement(id: id, to: snappedFrame, persist: persist)
-                        },
-                        onMoveElements: { framesByID, persist in
-                            store.moveElements(framesByID, persist: persist)
-                        },
-                        onUpdateAnnotationArrow: { id, anchor, target, persist in
-                            store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
-                        },
-                        onDelete: deleteElement
-                    )
-                    .frame(width: canvasSize.width, height: canvasSize.height)
-                    .scaleEffect(scale, anchor: .topLeading)
-                    .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+            ScrollViewReader { scrollProxy in
+                ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                            .frame(width: contentSize.width, height: contentSize.height)
+
+                        PrototypingEditableDraftCanvas(
+                            document: store.currentDocument,
+                            selectedElementIDs: selectedElementIDs,
+                            isMultiSelectionEnabled: isMultiSelectionEnabled,
+                            onSelect: selectElement,
+                            onToggleSelection: toggleElementSelection,
+                            onDeselect: deselectElement,
+                            onMove: { id, frame, persist in
+                                let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
+                                store.moveElement(id: id, to: snappedFrame, persist: persist)
+                            },
+                            onMoveElements: { framesByID, persist in
+                                store.moveElements(framesByID, persist: persist)
+                            },
+                            onUpdateAnnotationArrow: { id, anchor, target, persist in
+                                store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
+                            },
+                            onDelete: deleteElement
+                        )
+                        .frame(width: canvasSize.width, height: canvasSize.height)
+                        .scaleEffect(scale, anchor: .topLeading)
+                        .frame(width: scaledCanvasSize.width, height: scaledCanvasSize.height, alignment: .topLeading)
+                        .offset(
+                            x: max(stageMargin, (contentSize.width - scaledCanvasSize.width) / 2),
+                            y: max(stageMargin, (contentSize.height - scaledCanvasSize.height) / 2)
+                        )
+
+                        Color.clear
+                            .frame(width: 1, height: 1)
+                            .position(x: contentSize.width / 2, y: contentSize.height / 2)
+                            .id(stageCenterAnchorID)
+                    }
+                    .frame(width: contentSize.width, height: contentSize.height, alignment: .topLeading)
                 }
-                .frame(width: contentSize.width, height: contentSize.height)
+                .background(PrototypingKitColors.canvasSurface)
+                .onAppear {
+                    centerStage(scrollProxy, animated: false)
+                }
+                .onChange(of: centerResetID) { _ in
+                    centerStage(scrollProxy, animated: false)
+                }
             }
-            .background(PrototypingKitColors.canvasSurface)
-            .id(stageScrollResetID(scale: scale, canvasSize: canvasSize, availableSize: availableSize))
 
             stageZoomControls(scale: scale)
                 .padding(.top, 14)
@@ -322,7 +343,7 @@ public struct PrototypingKitView: View {
         return CGSize(width: width, height: height)
     }
 
-    private func stageScrollResetID(
+    private func stageCenterResetID(
         scale: CGFloat,
         canvasSize: CGSize,
         availableSize: CGSize
@@ -337,6 +358,22 @@ public struct PrototypingKitView: View {
 
     private var stageMargin: CGFloat {
         44
+    }
+
+    private var stageCenterAnchorID: String {
+        "prototyping-stage-center-anchor"
+    }
+
+    private func centerStage(_ scrollProxy: ScrollViewProxy, animated: Bool) {
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    scrollProxy.scrollTo(stageCenterAnchorID, anchor: .center)
+                }
+            } else {
+                scrollProxy.scrollTo(stageCenterAnchorID, anchor: .center)
+            }
+        }
     }
 
     private func setManualStageZoom(_ scale: CGFloat) {
