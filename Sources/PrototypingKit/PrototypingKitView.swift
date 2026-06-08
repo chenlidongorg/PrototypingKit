@@ -41,7 +41,8 @@ public struct PrototypingKitView: View {
     private let onClose: () -> Void
 
     @State private var activeAlert: PrototypingKitAlert?
-    @State private var selectedElementID: String?
+    @State private var selectedElementIDs: Set<String> = []
+    @State private var isMultiSelectionEnabled = false
     @State private var isSidebarExpanded = false
     @State private var inspectorExpandedOverride: Bool?
     @State private var activeLibrary: PrototypingLibrarySheet?
@@ -49,6 +50,8 @@ public struct PrototypingKitView: View {
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
     @AppStorage("PrototypingKit.showTemplateSection.v2") private var isTemplateSectionVisible = true
     @AppStorage("PrototypingKit.showGridSection.v2") private var isGridSectionVisible = true
+    @AppStorage("PrototypingKit.stageZoomMode") private var stageZoomMode = "fit"
+    @AppStorage("PrototypingKit.stageZoom") private var manualStageZoom = 1.0
 
     @MainActor
     public init(
@@ -148,31 +151,12 @@ public struct PrototypingKitView: View {
             let isWide = proxy.size.width >= 900
             let inspectorIsExpanded = inspectorExpandedOverride ?? isWide
             let inspectorWidth = min(max(proxy.size.width * 0.28, 250), 340)
+            let stageWidth = inspectorIsExpanded && isWide ? proxy.size.width - inspectorWidth - 1 : proxy.size.width
+            let stageSize = CGSize(width: max(1, stageWidth), height: max(1, proxy.size.height))
 
             ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
-                    ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                        PrototypingEditableDraftCanvas(
-                            document: store.currentDocument,
-                            selectedElementID: selectedElementID,
-                            onSelect: selectElement,
-                            onDeselect: deselectElement,
-                            onMove: { id, frame, persist in
-                                let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
-                                store.moveElement(id: id, to: snappedFrame, persist: persist)
-                            },
-                            onUpdateAnnotationArrow: { id, anchor, target, persist in
-                                store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
-                            },
-                            onDelete: deleteElement
-                        )
-                            .frame(
-                                width: store.currentDocument.canvasSize.cgSize.width,
-                                height: store.currentDocument.canvasSize.cgSize.height
-                            )
-                            .padding(28)
-                    }
-                    .background(PrototypingKitColors.canvasSurface)
+                    stageArea(availableSize: stageSize)
 
                     if inspectorIsExpanded && isWide {
                         Divider()
@@ -223,6 +207,112 @@ public struct PrototypingKitView: View {
                 }
             }
         }
+    }
+
+    private func stageArea(availableSize: CGSize) -> some View {
+        let canvasSize = store.currentDocument.canvasSize.cgSize
+        let fitScale = stageFitScale(availableSize: availableSize)
+        let scale = stageZoomMode == "fit" ? fitScale : clampStageZoom(CGFloat(manualStageZoom))
+
+        return ZStack(alignment: .topTrailing) {
+            ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                PrototypingEditableDraftCanvas(
+                    document: store.currentDocument,
+                    selectedElementIDs: selectedElementIDs,
+                    isMultiSelectionEnabled: isMultiSelectionEnabled,
+                    onSelect: selectElement,
+                    onToggleSelection: toggleElementSelection,
+                    onDeselect: deselectElement,
+                    onMove: { id, frame, persist in
+                        let snappedFrame = store.snappedFrame(id: id, proposedFrame: frame)
+                        store.moveElement(id: id, to: snappedFrame, persist: persist)
+                    },
+                    onMoveElements: { framesByID, persist in
+                        store.moveElements(framesByID, persist: persist)
+                    },
+                    onUpdateAnnotationArrow: { id, anchor, target, persist in
+                        store.updateAnnotationArrow(id: id, anchor: anchor, target: target, persist: persist)
+                    },
+                    onDelete: deleteElement
+                )
+                .frame(width: canvasSize.width, height: canvasSize.height)
+                .scaleEffect(scale, anchor: .topLeading)
+                .frame(width: canvasSize.width * scale, height: canvasSize.height * scale)
+                .padding(28)
+            }
+            .background(PrototypingKitColors.canvasSurface)
+
+            stageZoomControls(scale: scale)
+                .padding(.top, 14)
+                .padding(.trailing, 14)
+        }
+        .frame(width: availableSize.width, height: availableSize.height)
+    }
+
+    private func stageZoomControls(scale: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            Button(action: {
+                stageZoomMode = "fit"
+            }) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 30, height: 30)
+            }
+            .foregroundColor(stageZoomMode == "fit" ? PrototypingKitColors.accent : PrototypingKitColors.ink)
+            .buttonStyle(PlainButtonStyle())
+
+            Button(action: {
+                setManualStageZoom(scale - 0.1)
+            }) {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Text("\(Int((scale * 100).rounded()))%")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(PrototypingKitColors.secondaryInk)
+                .frame(width: 46)
+
+            Button(action: {
+                setManualStageZoom(scale + 0.1)
+            }) {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .foregroundColor(PrototypingKitColors.ink)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(PrototypingKitColors.panel.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(PrototypingKitColors.separator, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+    }
+
+    private func stageFitScale(availableSize: CGSize) -> CGFloat {
+        let canvasSize = store.currentDocument.canvasSize.cgSize
+        guard canvasSize.width > 0, canvasSize.height > 0 else { return 1 }
+
+        let availableWidth = max(120, availableSize.width - 84)
+        let availableHeight = max(120, availableSize.height - 84)
+        let scale = min(availableWidth / canvasSize.width, availableHeight / canvasSize.height)
+        return clampStageZoom(scale)
+    }
+
+    private func setManualStageZoom(_ scale: CGFloat) {
+        stageZoomMode = "manual"
+        manualStageZoom = Double(clampStageZoom(scale))
+    }
+
+    private func clampStageZoom(_ scale: CGFloat) -> CGFloat {
+        min(2.0, max(0.18, scale))
     }
 
     private var sidebar: some View {
@@ -317,12 +407,39 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
+                    sectionTitle("选择")
+
+                    HStack(spacing: 8) {
+                        ChoiceChip(title: "多选", isSelected: isMultiSelectionEnabled) {
+                            toggleMultiSelection()
+                        }
+                        .frame(width: 78)
+
+                        Text(selectedSummary)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(PrototypingKitColors.secondaryInk)
+                            .frame(minWidth: 48, alignment: .leading)
+
+                        Button(action: deselectElement) {
+                            Text("清空")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(PrototypingKitColors.secondaryInk)
+                                .padding(.horizontal, 10)
+                                .frame(height: 34)
+                                .background(PrototypingKitColors.controlSurfaceMuted)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
                     sectionTitle("草稿类型")
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
                         ForEach(PrototypingDraftKind.allCases) { kind in
                             ChoiceChip(title: kind.title, isSelected: store.currentDocument.kind == kind) {
-                                selectedElementID = nil
+                                selectedElementIDs = []
                                 store.applyKind(kind)
                             }
                         }
@@ -338,7 +455,7 @@ public struct PrototypingKitView: View {
                         } else {
                             ForEach(PrototypingDeviceKind.allCases) { device in
                                 ChoiceChip(title: device.title, isSelected: store.currentDocument.device == device) {
-                                    selectedElementID = nil
+                                    selectedElementIDs = []
                                     store.applyDevice(device)
                                 }
                             }
@@ -349,7 +466,7 @@ public struct PrototypingKitView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                             ForEach(PrototypingDeviceOrientation.allCases) { orientation in
                                 ChoiceChip(title: orientation.title, isSelected: store.currentDocument.orientation == orientation) {
-                                    selectedElementID = nil
+                                    selectedElementIDs = []
                                     store.applyOrientation(orientation)
                                 }
                             }
@@ -433,7 +550,7 @@ public struct PrototypingKitView: View {
                                     title: "\(Int(gridSize))",
                                     isSelected: Int(store.currentDocument.gridSize) == Int(gridSize)
                                 ) {
-                                    selectedElementID = nil
+                                    selectedElementIDs = []
                                     store.updateGridSize(gridSize)
                                 }
                             }
@@ -543,33 +660,59 @@ public struct PrototypingKitView: View {
     }
 
     private var selectedElement: PrototypingCanvasElement? {
-        guard let selectedElementID else { return nil }
+        guard let selectedElementID = singleSelectedElementID else { return nil }
         return store.currentDocument.elements.first { $0.id == selectedElementID }
     }
 
+    private var singleSelectedElementID: String? {
+        selectedElementIDs.count == 1 ? selectedElementIDs.first : nil
+    }
+
+    private var selectedSummary: String {
+        selectedElementIDs.isEmpty ? "未选择" : "已选 \(selectedElementIDs.count)"
+    }
+
     private func selectElement(_ id: String) {
-        selectedElementID = id
+        selectedElementIDs = [id]
         store.bringElementToFront(id: id)
     }
 
+    private func toggleElementSelection(_ id: String) {
+        if selectedElementIDs.contains(id) {
+            selectedElementIDs.remove(id)
+        } else {
+            selectedElementIDs.insert(id)
+            store.bringElementToFront(id: id)
+        }
+    }
+
     private func deselectElement() {
-        selectedElementID = nil
+        selectedElementIDs = []
+    }
+
+    private func toggleMultiSelection() {
+        isMultiSelectionEnabled.toggle()
+        if !isMultiSelectionEnabled, let selectedElementID = singleSelectedElementID {
+            selectedElementIDs = [selectedElementID]
+        } else if !isMultiSelectionEnabled {
+            selectedElementIDs = selectedElementIDs.first.map { [$0] } ?? []
+        }
     }
 
     private func createDraft() {
-        selectedElementID = nil
+        selectedElementIDs = []
         store.createNewDraft()
         isSidebarExpanded = false
     }
 
     private func openDraft(id: String) {
-        selectedElementID = nil
+        selectedElementIDs = []
         store.openDraft(id: id)
         isSidebarExpanded = false
     }
 
     private func applyTemplateFromUI(_ template: PrototypingTemplate) {
-        selectedElementID = nil
+        selectedElementIDs = []
         if store.currentDocument.elements.isEmpty {
             commitTemplate(template)
         } else {
@@ -585,7 +728,7 @@ public struct PrototypingKitView: View {
     private func addComponentFromUI(_ component: PrototypingComponent) {
         rememberComponent(component)
         store.addComponent(component)
-        selectedElementID = store.currentDocument.elements.last?.id
+        selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
     }
 
     private func rememberTemplate(_ template: PrototypingTemplate) {
@@ -638,7 +781,7 @@ public struct PrototypingKitView: View {
 
     private func deleteElement(_ id: String) {
         store.deleteElement(id: id)
-        self.selectedElementID = nil
+        selectedElementIDs.remove(id)
     }
 }
 

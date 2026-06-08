@@ -18,7 +18,7 @@ struct PrototypingDraftCanvas: View {
         canvasShell(document: document) {
             PrototypingCanvasElementsLayer(
                 document: document,
-                selectedElementID: nil
+                selectedElementIDs: []
             )
         }
     }
@@ -26,10 +26,13 @@ struct PrototypingDraftCanvas: View {
 
 struct PrototypingEditableDraftCanvas: View {
     let document: PrototypingDraftDocument
-    let selectedElementID: String?
+    let selectedElementIDs: Set<String>
+    let isMultiSelectionEnabled: Bool
     let onSelect: (String) -> Void
+    let onToggleSelection: (String) -> Void
     let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onMoveElements: ([String: PrototypingElementFrame], Bool) -> Void
     let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
     let onDelete: (String) -> Void
 
@@ -37,18 +40,21 @@ struct PrototypingEditableDraftCanvas: View {
         canvasShell(document: document) {
             PrototypingCanvasElementsLayer(
                 document: document,
-                selectedElementID: selectedElementID
+                selectedElementIDs: selectedElementIDs
             )
             SnapGuideOverlay(
                 document: document,
-                selectedElementID: selectedElementID
+                selectedElementIDs: selectedElementIDs
             )
             PrototypingCanvasInteractionOverlay(
                 document: document,
-                selectedElementID: selectedElementID,
+                selectedElementIDs: selectedElementIDs,
+                isMultiSelectionEnabled: isMultiSelectionEnabled,
                 onSelect: onSelect,
+                onToggleSelection: onToggleSelection,
                 onDeselect: onDeselect,
                 onMove: onMove,
+                onMoveElements: onMoveElements,
                 onUpdateAnnotationArrow: onUpdateAnnotationArrow,
                 onDelete: onDelete
             )
@@ -139,7 +145,11 @@ private func clampedPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
 
 private struct PrototypingCanvasElementsLayer: View {
     let document: PrototypingDraftDocument
-    let selectedElementID: String?
+    let selectedElementIDs: Set<String>
+
+    private var singleSelectedElementID: String? {
+        selectedElementIDs.count == 1 ? selectedElementIDs.first : nil
+    }
 
     var body: some View {
         GeometryReader { _ in
@@ -151,7 +161,8 @@ private struct PrototypingCanvasElementsLayer: View {
                         element: element,
                         canvasSize: document.canvasSize.cgSize,
                         note: document.note,
-                        isSelected: element.id == selectedElementID
+                        isSelected: selectedElementIDs.contains(element.id),
+                        isSingleSelected: element.id == singleSelectedElementID
                     )
                 }
             }
@@ -165,6 +176,7 @@ private struct PrototypingElementContainer: View {
     let canvasSize: CGSize
     let note: String
     let isSelected: Bool
+    let isSingleSelected: Bool
 
     var body: some View {
         let rect = element.frame.cgRect
@@ -174,7 +186,8 @@ private struct PrototypingElementContainer: View {
             .overlay(
                 SelectionChrome(
                     isSelected: isSelected,
-                    showsAnnotationHandles: element.component == .aiNote
+                    showsResizeHandles: isSingleSelected,
+                    showsAnnotationHandles: isSingleSelected && element.component == .aiNote
                 )
             )
             .position(x: rect.midX, y: rect.midY)
@@ -236,6 +249,7 @@ private struct AnnotationArrowShape: Shape {
 
 private struct SelectionChrome: View {
     let isSelected: Bool
+    let showsResizeHandles: Bool
     let showsAnnotationHandles: Bool
 
     var body: some View {
@@ -263,15 +277,17 @@ private struct SelectionChrome: View {
                     }
                 }
 
-                ForEach(PrototypingResizeEdge.allCases) { edge in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(Color.blue.opacity(0.92), lineWidth: 2)
-                        )
-                        .frame(width: 13, height: 13)
-                        .position(resizeHandlePoint(in: CGRect(origin: .zero, size: proxy.size), edge: edge))
+                if showsResizeHandles {
+                    ForEach(PrototypingResizeEdge.allCases) { edge in
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .stroke(Color.blue.opacity(0.92), lineWidth: 2)
+                            )
+                            .frame(width: 13, height: 13)
+                            .position(resizeHandlePoint(in: CGRect(origin: .zero, size: proxy.size), edge: edge))
+                    }
                 }
             }
         }
@@ -289,7 +305,7 @@ private struct SelectionChrome: View {
 
 private struct SnapGuideOverlay: View {
     let document: PrototypingDraftDocument
-    let selectedElementID: String?
+    let selectedElementIDs: Set<String>
 
     var body: some View {
         GeometryReader { proxy in
@@ -318,13 +334,12 @@ private struct SnapGuideOverlay: View {
     }
 
     private var selectedRect: CGRect? {
-        guard let selectedElementID,
-              let element = document.elements.first(where: { $0.id == selectedElementID })
-        else {
-            return nil
+        let rects = document.elements
+            .filter { selectedElementIDs.contains($0.id) }
+            .map { $0.frame.cgRect }
+        return rects.reduce(nil) { partial, rect in
+            partial?.union(rect) ?? rect
         }
-
-        return element.frame.cgRect
     }
 }
 
@@ -345,10 +360,13 @@ private struct GuideTag: View {
 
 private struct PrototypingCanvasInteractionOverlay: View {
     let document: PrototypingDraftDocument
-    let selectedElementID: String?
+    let selectedElementIDs: Set<String>
+    let isMultiSelectionEnabled: Bool
     let onSelect: (String) -> Void
+    let onToggleSelection: (String) -> Void
     let onDeselect: () -> Void
     let onMove: (String, PrototypingElementFrame, Bool) -> Void
+    let onMoveElements: ([String: PrototypingElementFrame], Bool) -> Void
     let onUpdateAnnotationArrow: (String, PrototypingAnnotationAnchor, CGPoint?, Bool) -> Void
     let onDelete: (String) -> Void
 
@@ -356,6 +374,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
     @State private var draggingStartFrame: PrototypingElementFrame?
     @State private var draggingAnnotation: AnnotationDrag?
     @State private var draggingResize: ResizeDrag?
+    @State private var draggingGroup: GroupDrag?
 
     private struct AnnotationDrag {
         let elementID: String
@@ -367,6 +386,10 @@ private struct PrototypingCanvasInteractionOverlay: View {
         let edge: PrototypingResizeEdge
         let startFrame: PrototypingElementFrame
         let component: PrototypingComponent
+    }
+
+    private struct GroupDrag {
+        let startFrames: [String: PrototypingElementFrame]
     }
 
     var body: some View {
@@ -391,7 +414,12 @@ private struct PrototypingCanvasInteractionOverlay: View {
                     onDeselect()
                     return
                 }
-                onSelect(element.id)
+
+                if isMultiSelectionEnabled {
+                    onToggleSelection(element.id)
+                } else {
+                    onSelect(element.id)
+                }
             },
             onDoubleTap: { point in
                 guard let element = hitElement(at: point) else { return }
@@ -401,6 +429,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
                 if let annotationControl = hitAnnotationControl(at: point) {
                     draggingAnnotation = annotationControl
                     draggingResize = nil
+                    draggingGroup = nil
                     draggingElementID = nil
                     draggingStartFrame = nil
                     onSelect(annotationControl.elementID)
@@ -410,6 +439,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
                 if let resizeControl = hitResizeControl(at: point) {
                     draggingResize = resizeControl
                     draggingAnnotation = nil
+                    draggingGroup = nil
                     draggingElementID = nil
                     draggingStartFrame = nil
                     onSelect(resizeControl.elementID)
@@ -421,12 +451,25 @@ private struct PrototypingCanvasInteractionOverlay: View {
                     draggingStartFrame = nil
                     draggingAnnotation = nil
                     draggingResize = nil
+                    draggingGroup = nil
                     return
                 }
+
+                let groupStartFrames = selectedGroupStartFrames(for: element)
+                if groupStartFrames.count > 1 {
+                    draggingGroup = GroupDrag(startFrames: groupStartFrames)
+                    draggingElementID = nil
+                    draggingStartFrame = nil
+                    draggingAnnotation = nil
+                    draggingResize = nil
+                    return
+                }
+
                 draggingElementID = element.id
                 draggingStartFrame = element.frame
                 draggingAnnotation = nil
                 draggingResize = nil
+                draggingGroup = nil
                 onSelect(element.id)
             },
             onPanChanged: { point, translation in
@@ -448,6 +491,14 @@ private struct PrototypingCanvasInteractionOverlay: View {
                         component: draggingResize.component
                     )
                     onMove(draggingResize.elementID, frame, false)
+                    return
+                }
+
+                if let draggingGroup {
+                    onMoveElements(
+                        movedFrames(from: draggingGroup.startFrames, by: translation),
+                        false
+                    )
                     return
                 }
 
@@ -479,6 +530,15 @@ private struct PrototypingCanvasInteractionOverlay: View {
                     return
                 }
 
+                if let draggingGroup {
+                    onMoveElements(
+                        movedFrames(from: draggingGroup.startFrames, by: translation),
+                        true
+                    )
+                    self.draggingGroup = nil
+                    return
+                }
+
                 guard let draggingElementID, let draggingStartFrame else { return }
                 let frame = draggingStartFrame.moved(by: translation, inside: document.canvasSize.cgSize)
                 onMove(draggingElementID, frame, true)
@@ -489,6 +549,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
     }
 
     private func hitAnnotationControl(at point: CGPoint) -> AnnotationDrag? {
+        guard selectedElementIDs.count == 1 else { return nil }
         guard let selectedAnnotation = selectedAnnotation else { return nil }
         let rect = selectedAnnotation.frame.cgRect
 
@@ -508,6 +569,7 @@ private struct PrototypingCanvasInteractionOverlay: View {
     }
 
     private func hitResizeControl(at point: CGPoint) -> ResizeDrag? {
+        guard selectedElementIDs.count == 1 else { return nil }
         guard let selectedElement = selectedElement else { return nil }
         let rect = selectedElement.frame.cgRect
 
@@ -537,6 +599,44 @@ private struct PrototypingCanvasInteractionOverlay: View {
         }
 
         return target
+    }
+
+    private func selectedGroupStartFrames(for hitElement: PrototypingCanvasElement) -> [String: PrototypingElementFrame] {
+        guard isMultiSelectionEnabled else { return [:] }
+        guard selectedElementIDs.contains(hitElement.id) else { return [:] }
+
+        return document.elements.reduce(into: [:]) { result, element in
+            if selectedElementIDs.contains(element.id) {
+                result[element.id] = element.frame
+            }
+        }
+    }
+
+    private func movedFrames(
+        from startFrames: [String: PrototypingElementFrame],
+        by translation: CGSize
+    ) -> [String: PrototypingElementFrame] {
+        guard let groupRect = startFrames.values.map(\.cgRect).reduce(nil, { partial, rect in
+            partial?.union(rect) ?? rect
+        }) else {
+            return [:]
+        }
+
+        let canvasSize = document.canvasSize.cgSize
+        let unit = max(4, CGFloat(document.gridSize))
+        var dx = snap(translation.width, unit: unit)
+        var dy = snap(translation.height, unit: unit)
+        dx = min(max(dx, -groupRect.minX), canvasSize.width - groupRect.maxX)
+        dy = min(max(dy, -groupRect.minY), canvasSize.height - groupRect.maxY)
+
+        return startFrames.mapValues { frame in
+            PrototypingElementFrame(
+                x: frame.x + Double(dx),
+                y: frame.y + Double(dy),
+                width: frame.width,
+                height: frame.height
+            )
+        }
     }
 
     private func resizedFrame(
@@ -587,13 +687,17 @@ private struct PrototypingCanvasInteractionOverlay: View {
     }
 
     private var selectedAnnotation: PrototypingCanvasElement? {
-        guard let selectedElementID else { return nil }
+        guard let selectedElementID = singleSelectedElementID else { return nil }
         return document.elements.first { $0.id == selectedElementID && $0.component == .aiNote }
     }
 
     private var selectedElement: PrototypingCanvasElement? {
-        guard let selectedElementID else { return nil }
+        guard let selectedElementID = singleSelectedElementID else { return nil }
         return document.elements.first { $0.id == selectedElementID }
+    }
+
+    private var singleSelectedElementID: String? {
+        selectedElementIDs.count == 1 ? selectedElementIDs.first : nil
     }
 
     private func hitElement(at point: CGPoint) -> PrototypingCanvasElement? {
@@ -621,6 +725,11 @@ private struct PrototypingCanvasInteractionOverlay: View {
 
     private func clamp(_ value: CGFloat, _ minimum: CGFloat, _ maximum: CGFloat) -> CGFloat {
         min(maximum, max(minimum, value))
+    }
+
+    private func snap(_ value: CGFloat, unit: CGFloat) -> CGFloat {
+        guard unit > 0 else { return value }
+        return (value / unit).rounded() * unit
     }
 }
 

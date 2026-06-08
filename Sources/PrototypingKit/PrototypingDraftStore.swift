@@ -218,6 +218,30 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
+    public func moveElements(_ framesByID: [String: PrototypingElementFrame], persist: Bool) {
+        guard !framesByID.isEmpty else { return }
+        var document = currentDocument
+        var didMove = false
+
+        for index in document.elements.indices {
+            guard let frame = framesByID[document.elements[index].id] else { continue }
+            document.elements[index].frame = frame
+            didMove = true
+        }
+
+        guard didMove else { return }
+
+        if persist {
+            document.updatedAt = Date()
+            document.revisionID = UUID().uuidString
+        }
+
+        currentDocument = document
+        if persist {
+            saveCurrentDocument()
+        }
+    }
+
     public func updateAnnotationArrow(
         id: String,
         anchor: PrototypingAnnotationAnchor,

@@ -877,7 +877,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                 element(.aiNote, x: 244, y: 92, width: 112, height: 38)
             ]
         case .tabletDashboard:
-            return [
+            baseElements = [
                 element(.sidebar, x: 32, y: 40, width: 156, height: 1114),
                 element(.topNavigation, x: 216, y: 40, width: 586, height: 56),
                 element(.title, x: 216, y: 132, width: 260, height: 38),
@@ -900,8 +900,11 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
             ]
         }
 
-        guard canvasSize != .phone else { return baseElements }
-        return scaledElements(baseElements, from: PrototypingCanvasSize.phone.cgSize, to: canvasSize.cgSize)
+        let sourceSize = template == .tabletDashboard
+            ? PrototypingCanvasSize.tablet.cgSize
+            : PrototypingCanvasSize.phone.cgSize
+        guard canvasSize.cgSize != sourceSize else { return baseElements }
+        return scaledElements(baseElements, from: sourceSize, to: canvasSize.cgSize)
     }
 
     private static func scaledElements(
@@ -910,17 +913,24 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         to targetSize: CGSize
     ) -> [PrototypingCanvasElement] {
         guard sourceSize.width > 0, sourceSize.height > 0 else { return elements }
-        let scale = min(targetSize.width / sourceSize.width, targetSize.height / sourceSize.height)
-        let xOffset = max(0, (targetSize.width - sourceSize.width * scale) / 2)
-        let yOffset = max(0, (targetSize.height - sourceSize.height * scale) / 2)
+        let scaleX = targetSize.width / sourceSize.width
+        let scaleY = targetSize.height / sourceSize.height
 
         return elements.map { element in
             var copy = element
+            let minimumSize = element.component == .aiNote
+                ? minimumSize(for: .aiNote)
+                : CGSize(width: 12, height: 12)
             copy.frame = PrototypingElementFrame(
-                x: Double(xOffset + CGFloat(element.frame.x) * scale),
-                y: Double(yOffset + CGFloat(element.frame.y) * scale),
-                width: Double(CGFloat(element.frame.width) * scale),
-                height: Double(CGFloat(element.frame.height) * scale)
+                x: Double(CGFloat(element.frame.x) * scaleX),
+                y: Double(CGFloat(element.frame.y) * scaleY),
+                width: Double(CGFloat(element.frame.width) * scaleX),
+                height: Double(CGFloat(element.frame.height) * scaleY)
+            )
+            .constrained(
+                inside: targetSize,
+                minimumSize: minimumSize,
+                maximumSize: maximumSize(for: element.component, canvasSize: targetSize)
             )
             return copy
         }
