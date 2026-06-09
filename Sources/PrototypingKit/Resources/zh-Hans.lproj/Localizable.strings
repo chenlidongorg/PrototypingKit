@@ -45,6 +45,7 @@
 "component.toggle" = "开关";
 "component.top_navigation" = "顶部导航";
 "default.annotation_text" = "注释文字";
+"default.legacy_annotation_text" = "核心功能";
 "default.untitled" = "未命名";
 "device.phone" = "手机";
 "device.tablet" = "平板";
@@ -57,6 +58,9 @@
 "export.save_pdf" = "保存 PDF";
 "export.share_pdf" = "分享 PDF";
 "field.title" = "标题";
+"help.button" = "帮助";
+"help.title" = "温馨提示";
+"help.message" = "本设计原型初衷是让用户可以简单快速组成一个设计初稿，方便交流，特别是可以方便发送给AI进一步设计。\n\n一些特色手势：\n1、双击组件可以移除。\n2、长按草稿列表标题可以进入编辑标题。";
 "guide.grid" = "grid %d";
 "launcher.tools" = "工具";
 "orientation.landscape" = "横屏";

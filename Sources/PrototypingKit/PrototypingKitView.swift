@@ -23,12 +23,15 @@ private enum PrototypingLibrarySheet: String, Identifiable {
 
 private enum PrototypingKitAlert: Identifiable {
     case message(String)
+    case help
     case applyTemplate(PrototypingTemplate)
 
     var id: String {
         switch self {
         case .message(let message):
             return "message-\(message)"
+        case .help:
+            return "help"
         case .applyTemplate(let template):
             return "template-\(template.rawValue)"
         }
@@ -134,6 +137,12 @@ public struct PrototypingKitView: View {
                 return Alert(
                     title: Text(PrototypingL10n.text("app.title")),
                     message: Text(message),
+                    dismissButton: .default(Text(PrototypingL10n.text("action.ok")))
+                )
+            case .help:
+                return Alert(
+                    title: Text(PrototypingL10n.text("help.title")),
+                    message: Text(PrototypingL10n.text("help.message")),
                     dismissButton: .default(Text(PrototypingL10n.text("action.ok")))
                 )
             case .applyTemplate(let template):
@@ -566,6 +575,16 @@ public struct PrototypingKitView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     sectionTitle(PrototypingL10n.text("section.actions"))
+
+                    Button(action: { activeAlert = .help }) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(PrototypingKitColors.secondaryInk)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(PrototypingL10n.text("help.button"))
+
                     Spacer()
                     Button(action: { inspectorExpandedOverride = false }) {
                         Image(systemName: "chevron.right")

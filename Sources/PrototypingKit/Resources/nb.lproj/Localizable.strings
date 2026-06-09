@@ -45,6 +45,7 @@
 "component.toggle" = "Toggle";
 "component.top_navigation" = "Top nav";
 "default.annotation_text" = "Note text";
+"default.legacy_annotation_text" = "核心功能";
 "default.untitled" = "Untitled";
 "device.phone" = "Phone";
 "device.tablet" = "Tablet";
@@ -57,6 +58,9 @@
 "export.save_pdf" = "Save PDF";
 "export.share_pdf" = "Share PDF";
 "field.title" = "Title";
+"help.button" = "Help";
+"help.title" = "Tips";
+"help.message" = "This prototyping tool is designed to help you quickly assemble an early design draft for discussion, especially one you can send to AI for further design.\n\nGestures:\n1. Double-tap a component to remove it.\n2. Long-press a draft title in the draft list to edit it.";
 "guide.grid" = "grid %d";
 "launcher.tools" = "Tools";
 "orientation.landscape" = "Landscape";

@@ -587,7 +587,9 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
     public static var defaultAnnotationText: String {
         PrototypingL10n.text("default.annotation_text")
     }
-    private static let legacyDefaultAnnotationText = "核心功能"
+    private static var legacyDefaultAnnotationText: String {
+        PrototypingL10n.text("default.legacy_annotation_text")
+    }
 
     public static func annotationTextOrDefault(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
