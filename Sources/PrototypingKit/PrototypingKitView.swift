@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum PrototypingKitColors {
     static let surface = Color(red: 0.98, green: 0.985, blue: 0.99)
@@ -506,12 +507,14 @@ public struct PrototypingKitView: View {
                     ForEach(store.records) { record in
                         DraftRecordRow(
                             record: record,
-                            isSelected: record.id == store.currentDocument.id
+                            isSelected: record.id == store.currentDocument.id,
+                            onOpen: {
+                                openDraft(id: record.id)
+                            },
+                            onRename: { title in
+                                store.renameDraft(id: record.id, title: title)
+                            }
                         )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            openDraft(id: record.id)
-                        }
                     }
                 }
             }
@@ -1149,9 +1152,15 @@ private struct InsertCanvasIcon: View {
     }
 }
 
+@available(iOS 14.0, macCatalyst 14.0, *)
 private struct DraftRecordRow: View {
     let record: PrototypingDraftRecord
     let isSelected: Bool
+    let onOpen: () -> Void
+    let onRename: (String) -> Void
+
+    @State private var isEditingTitle = false
+    @State private var editingTitle = ""
 
     var body: some View {
         HStack(spacing: 10) {
@@ -1164,10 +1173,31 @@ private struct DraftRecordRow: View {
                 )
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(record.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(PrototypingKitColors.ink)
-                    .lineLimit(1)
+                if isEditingTitle {
+                    HStack(spacing: 6) {
+                        DraftTitleRenameField(
+                            text: $editingTitle,
+                            isFirstResponder: isEditingTitle,
+                            onCommit: finishEditing
+                        )
+                        .frame(height: 24)
+
+                        Button(action: finishEditing) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(PrototypingKitColors.accent)
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityLabel(PrototypingL10n.text("action.done"))
+                    }
+                } else {
+                    Text(record.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(PrototypingKitColors.ink)
+                        .lineLimit(1)
+                }
+
                 Text(formattedUpdatedAt)
                     .font(.caption)
                     .foregroundColor(PrototypingKitColors.secondaryInk)
@@ -1178,12 +1208,110 @@ private struct DraftRecordRow: View {
         .padding(8)
         .background(isSelected ? PrototypingKitColors.accent.opacity(0.08) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isEditingTitle else { return }
+            onOpen()
+        }
+        .onLongPressGesture {
+            beginEditing()
+        }
+        .onAppear {
+            if editingTitle.isEmpty {
+                editingTitle = record.title
+            }
+        }
+        .onChange(of: record.title) { title in
+            guard !isEditingTitle else { return }
+            editingTitle = title
+        }
     }
 
     private var formattedUpdatedAt: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM-dd HH:mm"
         return formatter.string(from: record.updatedAt)
+    }
+
+    private func beginEditing() {
+        editingTitle = record.title
+        isEditingTitle = true
+    }
+
+    private func finishEditing() {
+        let trimmedTitle = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = trimmedTitle.isEmpty ? record.title : trimmedTitle
+        editingTitle = resolvedTitle
+        isEditingTitle = false
+
+        if resolvedTitle != record.title {
+            onRename(resolvedTitle)
+        }
+    }
+}
+
+private struct DraftTitleRenameField: UIViewRepresentable {
+    @Binding var text: String
+    let isFirstResponder: Bool
+    let onCommit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onCommit: onCommit)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.delegate = context.coordinator
+        textField.font = .systemFont(ofSize: 13, weight: .semibold)
+        textField.textColor = UIColor.black.withAlphaComponent(0.86)
+        textField.tintColor = UIColor(red: 0.02, green: 0.48, blue: 0.98, alpha: 1)
+        textField.returnKeyType = .done
+        textField.clearButtonMode = .whileEditing
+        textField.borderStyle = .none
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textField.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textDidChange(_:)),
+            for: .editingChanged
+        )
+        return textField
+    }
+
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        context.coordinator.onCommit = onCommit
+
+        if uiView.text != text {
+            uiView.text = text
+        }
+
+        if isFirstResponder && !uiView.isFirstResponder {
+            DispatchQueue.main.async {
+                uiView.becomeFirstResponder()
+                uiView.selectAll(nil)
+            }
+        } else if !isFirstResponder && uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var text: Binding<String>
+        var onCommit: () -> Void
+
+        init(text: Binding<String>, onCommit: @escaping () -> Void) {
+            self.text = text
+            self.onCommit = onCommit
+        }
+
+        @objc func textDidChange(_ textField: UITextField) {
+            text.wrappedValue = textField.text ?? ""
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            text.wrappedValue = textField.text ?? ""
+            onCommit()
+            return true
+        }
     }
 }
 

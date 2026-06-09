@@ -83,6 +83,24 @@ public final class PrototypingDraftStore: ObservableObject {
         saveCurrentDocument()
     }
 
+    public func renameDraft(id: String, title: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = trimmedTitle.isEmpty ? PrototypingDraftDocument.defaultTitle() : trimmedTitle
+
+        if currentDocument.id == id {
+            update { document in
+                document.title = resolvedTitle
+            }
+            return
+        }
+
+        guard var document = loadDocument(id: id) else { return }
+        document.title = resolvedTitle
+        document.updatedAt = Date()
+        document.revisionID = UUID().uuidString
+        saveDraftDocument(document)
+    }
+
     public func applyTemplate(_ template: PrototypingTemplate) {
         update { document in
             let targetKind: PrototypingDraftKind = template.kind == .webPage ? .webPage : document.kind.normalized
@@ -410,6 +428,25 @@ public final class PrototypingDraftStore: ObservableObject {
         let url = draftFolder(id: id).appendingPathComponent("document.json")
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? decoder.decode(PrototypingDraftDocument.self, from: data)
+    }
+
+    private func saveDraftDocument(_ draftDocument: PrototypingDraftDocument) {
+        ensureFolders()
+        var document = draftDocument
+        document.syncActiveBoardFromCompatibilityFields()
+        document.ensureStandardBoards()
+
+        let folder = draftFolder(id: document.id)
+        try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? fileManager.createDirectory(at: exportFolder(id: document.id), withIntermediateDirectories: true)
+
+        if let data = try? encoder.encode(document) {
+            try? data.write(to: folder.appendingPathComponent("document.json"), options: .atomic)
+        }
+
+        writeThumbnail(for: document)
+        upsertRecord(document.record)
+        saveIndex()
     }
 
     private func upsertRecord(_ record: PrototypingDraftRecord) {
