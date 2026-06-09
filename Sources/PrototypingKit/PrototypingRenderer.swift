@@ -37,7 +37,12 @@ public enum PrototypingRenderer {
     }
 
     private static func render<Content: View>(view: Content, size: CGSize) -> UIImage {
-        let controller = UIHostingController(rootView: view)
+        let rootView = view
+            .frame(width: size.width, height: size.height)
+            .background(Color.white)
+            .edgesIgnoringSafeArea(.all)
+        let controller = UIHostingController(rootView: rootView)
+        controller.view.frame = CGRect(origin: .zero, size: size)
         controller.view.bounds = CGRect(origin: .zero, size: size)
         controller.view.backgroundColor = .white
 
