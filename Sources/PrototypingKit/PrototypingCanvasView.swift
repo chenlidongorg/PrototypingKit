@@ -5,7 +5,7 @@ struct PrototypingExportCanvas: View {
     let document: PrototypingDraftDocument
 
     var body: some View {
-        PrototypingDraftCanvas(document: document)
+        PrototypingDraftCanvas(document: document, showsGrid: false)
             .padding(18)
             .background(Color.white)
     }
@@ -13,9 +13,10 @@ struct PrototypingExportCanvas: View {
 
 struct PrototypingDraftCanvas: View {
     let document: PrototypingDraftDocument
+    var showsGrid = true
 
     var body: some View {
-        canvasShell(document: document) {
+        canvasShell(document: document, showsGrid: showsGrid) {
             PrototypingCanvasElementsLayer(
                 document: document,
                 selectedElementIDs: []
@@ -66,13 +67,16 @@ struct PrototypingEditableDraftCanvas: View {
 
 private func canvasShell<Content: View>(
     document: PrototypingDraftDocument,
+    showsGrid: Bool = true,
     @ViewBuilder content: () -> Content
 ) -> some View {
     let cornerRadius = canvasCornerRadius(for: document)
 
     return ZStack {
         Color.white
-        GridBackground(spacing: CGFloat(document.gridSize))
+        if showsGrid {
+            GridBackground(spacing: CGFloat(document.gridSize))
+        }
         content()
     }
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
