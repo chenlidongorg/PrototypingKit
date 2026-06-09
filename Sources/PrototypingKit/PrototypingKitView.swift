@@ -56,7 +56,7 @@ private struct PrototypingComponentItem: Identifiable, Hashable {
         guard component == .button, let buttonStyle else {
             return component.title
         }
-        return "按钮-\(buttonStyle.componentTitle)"
+        return PrototypingL10n.text("component.button_variant_format", PrototypingComponent.button.title, buttonStyle.componentTitle)
     }
 
     static func component(_ component: PrototypingComponent) -> PrototypingComponentItem {
@@ -72,17 +72,17 @@ private extension PrototypingButtonStyle {
     var componentTitle: String {
         switch self {
         case .primary:
-            return "圆角"
+            return PrototypingL10n.text("button_variant.rounded")
         case .secondary:
-            return "深色"
+            return PrototypingL10n.text("button_variant.dark")
         case .outline:
-            return "描边"
+            return PrototypingL10n.text("button_variant.outline")
         case .soft:
-            return "浅色"
+            return PrototypingL10n.text("button_variant.soft")
         case .ghost:
-            return "文字"
+            return PrototypingL10n.text("button_variant.text")
         case .pill:
-            return "胶囊"
+            return PrototypingL10n.text("button_variant.pill")
         }
     }
 }
@@ -131,18 +131,18 @@ public struct PrototypingKitView: View {
             switch alert {
             case .message(let message):
                 return Alert(
-                    title: Text("原型设计测试版"),
+                    title: Text(PrototypingL10n.text("app.title")),
                     message: Text(message),
-                    dismissButton: .default(Text("好"))
+                    dismissButton: .default(Text(PrototypingL10n.text("action.ok")))
                 )
             case .applyTemplate(let template):
                 return Alert(
-                    title: Text("套用模板？"),
-                    message: Text("会替换当前设备和方向里的组件。已做好的其它设备状态会保留。"),
-                    primaryButton: .destructive(Text("套用")) {
+                    title: Text(PrototypingL10n.text("alert.apply_template.title")),
+                    message: Text(PrototypingL10n.text("alert.apply_template.message")),
+                    primaryButton: .destructive(Text(PrototypingL10n.text("action.apply"))) {
                         commitTemplate(template)
                     },
-                    secondaryButton: .cancel(Text("取消"))
+                    secondaryButton: .cancel(Text(PrototypingL10n.text("action.cancel")))
                 )
             }
         }
@@ -157,14 +157,14 @@ public struct PrototypingKitView: View {
             }
             .buttonStyle(PlainButtonStyle())
 
-            TextField("标题", text: titleBinding)
+            TextField(PrototypingL10n.text("field.title"), text: titleBinding)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(PrototypingKitColors.ink)
                 .textFieldStyle(PlainTextFieldStyle())
 
             HStack(spacing: 22) {
                 Button(action: createDraft) {
-                    Label("新建", systemImage: "plus")
+                    Label(PrototypingL10n.text("toolbar.new"), systemImage: "plus")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(PrototypingKitColors.ink)
                 }
@@ -174,7 +174,7 @@ public struct PrototypingKitView: View {
                         HStack(spacing: 6) {
                             InsertCanvasIcon()
                                 .frame(width: 18, height: 18)
-                            Text("放进画布")
+                            Text(PrototypingL10n.text("toolbar.insert_canvas"))
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(PrototypingKitColors.ink)
@@ -183,13 +183,13 @@ public struct PrototypingKitView: View {
 
                     Menu {
                         Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
-                            Label("保存 PDF", systemImage: "doc.badge.plus")
+                            Label(PrototypingL10n.text("export.save_pdf"), systemImage: "doc.badge.plus")
                         }
                         Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
-                            Label("分享 PDF", systemImage: "square.and.arrow.up")
+                            Label(PrototypingL10n.text("export.share_pdf"), systemImage: "square.and.arrow.up")
                         }
                     } label: {
-                        Label("导出", systemImage: "square.and.arrow.up")
+                        Label(PrototypingL10n.text("toolbar.export"), systemImage: "square.and.arrow.up")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(PrototypingKitColors.ink)
                     }
@@ -436,7 +436,7 @@ public struct PrototypingKitView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("最近草稿")
+                Text(PrototypingL10n.text("sidebar.recent_drafts"))
                     .font(.headline)
                     .foregroundColor(PrototypingKitColors.ink)
                 Spacer()
@@ -493,7 +493,7 @@ public struct PrototypingKitView: View {
             HStack(spacing: 6) {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 15, weight: .semibold))
-                Text("工具")
+                Text(PrototypingL10n.text("launcher.tools"))
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundColor(PrototypingKitColors.accent)
@@ -514,7 +514,7 @@ public struct PrototypingKitView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    sectionTitle("操作工具")
+                    sectionTitle(PrototypingL10n.text("section.actions"))
                     Spacer()
                     Button(action: { inspectorExpandedOverride = false }) {
                         Image(systemName: "chevron.right")
@@ -525,12 +525,12 @@ public struct PrototypingKitView: View {
                 }
 
                 HStack {
-                    ChoiceChip(title: "多选", isSelected: isMultiSelectionEnabled) {
+                    ChoiceChip(title: PrototypingL10n.text("action.multi_select"), isSelected: isMultiSelectionEnabled) {
                         toggleMultiSelection()
                     }
                     .frame(width: 78)
 
-                    ChoiceChip(title: "注释", isSelected: selectedElement?.component == .aiNote) {
+                    ChoiceChip(title: PrototypingL10n.text("action.annotation"), isSelected: selectedElement?.component == .aiNote) {
                         addAnnotationFromUI()
                     }
                     .frame(width: 78)
@@ -539,7 +539,7 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("草稿类型")
+                    sectionTitle(PrototypingL10n.text("section.draft_kind"))
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
                         ForEach(PrototypingDraftKind.allCases) { kind in
@@ -553,7 +553,7 @@ public struct PrototypingKitView: View {
 
                 if store.currentDocument.kind != .webPage {
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionTitle("设备")
+                        sectionTitle(PrototypingL10n.text("section.device"))
 
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                             ForEach(PrototypingDeviceKind.allCases) { device in
@@ -581,7 +581,7 @@ public struct PrototypingKitView: View {
                             isTemplateSectionVisible.toggle()
                         }) {
                             HStack {
-                                Text("模板")
+                                Text(PrototypingL10n.text("section.template"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(PrototypingKitColors.secondaryInk)
                                 Image(systemName: isTemplateSectionVisible ? "chevron.up" : "chevron.down")
@@ -616,7 +616,7 @@ public struct PrototypingKitView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        sectionTitle("常用组件")
+                        sectionTitle(PrototypingL10n.text("section.components"))
                         Spacer()
                         MoreIconButton {
                             activeLibrary = .components
@@ -641,7 +641,7 @@ public struct PrototypingKitView: View {
                             isGridSectionVisible.toggle()
                         }) {
                             HStack {
-                                Text("网格")
+                                Text(PrototypingL10n.text("section.grid"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(PrototypingKitColors.secondaryInk)
                                 Image(systemName: isGridSectionVisible ? "chevron.up" : "chevron.down")
@@ -968,7 +968,7 @@ public struct PrototypingKitView: View {
             let result = try store.exportPDF(recommendedIntent: recommendedIntent)
             onExport(result)
         } catch {
-            activeAlert = .message("PDF 导出失败：\(error.localizedDescription)")
+            activeAlert = .message(PrototypingL10n.text("error.pdf_export_failed", error.localizedDescription))
         }
     }
 
@@ -988,7 +988,7 @@ private struct TemplateLibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            libraryHeader(title: "模板", onClose: onClose)
+            libraryHeader(title: PrototypingL10n.text("section.template"), onClose: onClose)
 
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 12)], spacing: 12) {
@@ -1019,7 +1019,7 @@ private struct ComponentLibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            libraryHeader(title: "组件", onClose: onClose)
+            libraryHeader(title: PrototypingL10n.text("section.components"), onClose: onClose)
 
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 98), spacing: 8)], spacing: 8) {
@@ -1044,7 +1044,7 @@ private func libraryHeader(title: String, onClose: @escaping () -> Void) -> some
             .foregroundColor(PrototypingKitColors.ink)
         Spacer()
         Button(action: onClose) {
-            Text("完成")
+            Text(PrototypingL10n.text("action.done"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(PrototypingKitColors.accent)
         }

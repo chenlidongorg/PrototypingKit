@@ -20,13 +20,13 @@ public enum PrototypingDraftKind: String, Codable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .appPage:
-            return "App页面"
+            return PrototypingL10n.text("draft_kind.app_page")
         case .webPage:
-            return "Web页面"
+            return PrototypingL10n.text("draft_kind.web_page")
         case .flowNote:
-            return "流程说明"
+            return PrototypingL10n.text("draft_kind.flow_note")
         case .deviceShowcase:
-            return "设备展示"
+            return PrototypingL10n.text("draft_kind.device_showcase")
         }
     }
 }
@@ -40,9 +40,9 @@ public enum PrototypingDeviceKind: String, Codable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .phone:
-            return "手机"
+            return PrototypingL10n.text("device.phone")
         case .tablet:
-            return "平板"
+            return PrototypingL10n.text("device.tablet")
         }
     }
 
@@ -69,9 +69,9 @@ public enum PrototypingDeviceOrientation: String, Codable, CaseIterable, Identif
     public var title: String {
         switch self {
         case .portrait:
-            return "竖屏"
+            return PrototypingL10n.text("orientation.portrait")
         case .landscape:
-            return "横屏"
+            return PrototypingL10n.text("orientation.landscape")
         }
     }
 }
@@ -158,71 +158,71 @@ public enum PrototypingTemplate: String, Codable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .blank:
-            return "空白模板"
+            return PrototypingL10n.text("template.blank")
         case .blankPhone:
-            return "空白手机页"
+            return PrototypingL10n.text("template.blank_phone")
         case .blankTablet:
-            return "空白平板页"
+            return PrototypingL10n.text("template.blank_tablet")
         case .login:
-            return "登录页"
+            return PrototypingL10n.text("template.login")
         case .list:
-            return "列表页"
+            return PrototypingL10n.text("template.list")
         case .detail:
-            return "详情页"
+            return PrototypingL10n.text("template.detail")
         case .form:
-            return "表单页"
+            return PrototypingL10n.text("template.form")
         case .chat:
-            return "聊天页"
+            return PrototypingL10n.text("template.chat")
         case .onboarding:
-            return "引导页"
+            return PrototypingL10n.text("template.onboarding")
         case .profile:
-            return "个人中心"
+            return PrototypingL10n.text("template.profile")
         case .settings:
-            return "设置页"
+            return PrototypingL10n.text("template.settings")
         case .checkout:
-            return "确认订单"
+            return PrototypingL10n.text("template.checkout")
         case .tabletDashboard:
-            return "平板看板"
+            return PrototypingL10n.text("template.tablet_dashboard")
         case .calendar:
-            return "日程页"
+            return PrototypingL10n.text("template.calendar")
         case .kanban:
-            return "任务看板"
+            return PrototypingL10n.text("template.kanban")
         case .mediaFeed:
-            return "内容流"
+            return PrototypingL10n.text("template.media_feed")
         case .finance:
-            return "数据概览"
+            return PrototypingL10n.text("template.finance")
         case .habitTracker:
-            return "打卡页"
+            return PrototypingL10n.text("template.habit_tracker")
         case .webHome:
-            return "Web首页"
+            return PrototypingL10n.text("template.web_home")
         case .dashboard:
-            return "后台Dashboard"
+            return PrototypingL10n.text("template.dashboard")
         case .landing:
-            return "Landing页"
+            return PrototypingL10n.text("template.landing")
         case .pricing:
-            return "价格页"
+            return PrototypingL10n.text("template.pricing")
         case .webPortfolio:
-            return "作品集"
+            return PrototypingL10n.text("template.web_portfolio")
         case .webBlog:
-            return "博客页"
+            return PrototypingL10n.text("template.web_blog")
         case .webDocs:
-            return "文档页"
+            return PrototypingL10n.text("template.web_docs")
         case .webSaaS:
-            return "SaaS首页"
+            return PrototypingL10n.text("template.web_saas")
         case .webAgency:
-            return "服务官网"
+            return PrototypingL10n.text("template.web_agency")
         case .webCourse:
-            return "课程页"
+            return PrototypingL10n.text("template.web_course")
         case .webEvent:
-            return "活动页"
+            return PrototypingL10n.text("template.web_event")
         case .webProduct:
-            return "产品页"
+            return PrototypingL10n.text("template.web_product")
         case .webGallery:
-            return "图库页"
+            return PrototypingL10n.text("template.web_gallery")
         case .webContact:
-            return "联系页"
+            return PrototypingL10n.text("template.web_contact")
         case .webStatus:
-            return "状态页"
+            return PrototypingL10n.text("template.web_status")
         }
     }
 
@@ -308,49 +308,49 @@ public enum PrototypingComponent: String, Codable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .title:
-            return "标题"
+            return PrototypingL10n.text("component.title")
         case .subtitle:
-            return "副标题"
+            return PrototypingL10n.text("component.subtitle")
         case .button:
-            return "按钮"
+            return PrototypingL10n.text("component.button")
         case .input:
-            return "输入框"
+            return PrototypingL10n.text("component.input")
         case .search:
-            return "搜索框"
+            return PrototypingL10n.text("component.search")
         case .card:
-            return "卡片"
+            return PrototypingL10n.text("component.card")
         case .listRow:
-            return "列表行"
+            return PrototypingL10n.text("component.list_row")
         case .imagePlaceholder:
-            return "图片占位"
+            return PrototypingL10n.text("component.image_placeholder")
         case .bottomNavigation:
-            return "底部导航"
+            return PrototypingL10n.text("component.bottom_navigation")
         case .topNavigation:
-            return "顶部导航"
+            return PrototypingL10n.text("component.top_navigation")
         case .segmentedControl:
-            return "分段控件"
+            return PrototypingL10n.text("component.segmented_control")
         case .avatar:
-            return "头像"
+            return PrototypingL10n.text("component.avatar")
         case .tag:
-            return "标签"
+            return PrototypingL10n.text("component.tag")
         case .toggle:
-            return "开关"
+            return PrototypingL10n.text("component.toggle")
         case .checkbox:
-            return "勾选项"
+            return PrototypingL10n.text("component.checkbox")
         case .progress:
-            return "进度条"
+            return PrototypingL10n.text("component.progress")
         case .chart:
-            return "图表"
+            return PrototypingL10n.text("component.chart")
         case .table:
-            return "表格"
+            return PrototypingL10n.text("component.table")
         case .sidebar:
-            return "侧边栏"
+            return PrototypingL10n.text("component.sidebar")
         case .dialog:
-            return "弹窗"
+            return PrototypingL10n.text("component.dialog")
         case .arrow:
-            return "箭头"
+            return PrototypingL10n.text("component.arrow")
         case .aiNote:
-            return "注释"
+            return PrototypingL10n.text("component.annotation")
         }
     }
 }
@@ -368,17 +368,17 @@ public enum PrototypingButtonStyle: String, Codable, CaseIterable, Identifiable 
     public var title: String {
         switch self {
         case .primary:
-            return "主按钮"
+            return PrototypingL10n.text("button_style.primary")
         case .secondary:
-            return "深色"
+            return PrototypingL10n.text("button_style.secondary")
         case .outline:
-            return "描边"
+            return PrototypingL10n.text("button_style.outline")
         case .soft:
-            return "柔和"
+            return PrototypingL10n.text("button_style.soft")
         case .ghost:
-            return "文字"
+            return PrototypingL10n.text("button_style.ghost")
         case .pill:
-            return "胶囊"
+            return PrototypingL10n.text("button_style.pill")
         }
     }
 }
@@ -584,7 +584,9 @@ public struct PrototypingDraftBoard: Codable, Identifiable, Hashable {
 }
 
 public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
-    public static let defaultAnnotationText = "注释文字"
+    public static var defaultAnnotationText: String {
+        PrototypingL10n.text("default.annotation_text")
+    }
     private static let legacyDefaultAnnotationText = "核心功能"
 
     public static func annotationTextOrDefault(_ text: String) -> String {
@@ -714,9 +716,9 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
 
     public static func defaultTitle(now: Date = Date()) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.locale = Locale.current
         formatter.dateFormat = "MM-dd HH:mm"
-        return "未命名 \(formatter.string(from: now))"
+        return "\(PrototypingL10n.text("default.untitled")) \(formatter.string(from: now))"
     }
 
     public var record: PrototypingDraftRecord {

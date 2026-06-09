@@ -335,7 +335,7 @@ private struct AnnotationInlineEditor: View {
             }
 
             Button(action: isEditing ? onDone : onEdit) {
-                Text(isEditing ? "完成" : "编辑")
+                Text(isEditing ? PrototypingL10n.text("action.done") : PrototypingL10n.text("action.edit"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 9)
@@ -430,7 +430,7 @@ private struct SnapGuideOverlay: View {
                     style: StrokeStyle(lineWidth: 1.3, lineCap: .round, dash: [7, 5])
                 )
 
-                GuideTag(text: "grid \(Int(document.gridSize))")
+                GuideTag(text: PrototypingL10n.text("guide.grid", Int(document.gridSize)))
                     .position(x: min(rect.maxX + 34, proxy.size.width - 34), y: max(rect.minY - 14, 14))
             }
         }

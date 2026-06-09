@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "PrototypingKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v13),
         .macCatalyst(.v13)
@@ -17,7 +18,10 @@ let package = Package(
     targets: [
         .target(
             name: "PrototypingKit",
-            path: "Sources/PrototypingKit"
+            path: "Sources/PrototypingKit",
+            resources: [
+                .process("Resources")
+            ]
         )
     ],
     swiftLanguageVersions: [

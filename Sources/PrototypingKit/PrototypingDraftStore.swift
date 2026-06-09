@@ -7,7 +7,7 @@ public enum PrototypingDraftStoreError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .emptyPDFExport:
-            return "当前草稿没有可导出的组件"
+            return PrototypingL10n.text("error.empty_pdf_export")
         }
     }
 }
@@ -186,9 +186,10 @@ public final class PrototypingDraftStore: ObservableObject {
                 for: component,
                 canvasSize: document.canvasSize
             )
+            let annotationText = PrototypingDraftDocument.defaultAnnotationText
             let preferredFrame = component == .aiNote
                 ? PrototypingDraftDocument.annotationFrame(
-                    for: PrototypingDraftDocument.annotationTextOrDefault(document.note),
+                    for: annotationText,
                     existingFrame: baseFrame,
                     canvasSize: document.canvasSize.cgSize
                 )
@@ -202,7 +203,7 @@ public final class PrototypingDraftStore: ObservableObject {
                 PrototypingCanvasElement(
                     component: component,
                     title: component == .aiNote
-                        ? PrototypingDraftDocument.annotationTextOrDefault(document.note)
+                        ? annotationText
                         : component.title,
                     frame: frame,
                     buttonStyle: buttonStyle ?? .primary
