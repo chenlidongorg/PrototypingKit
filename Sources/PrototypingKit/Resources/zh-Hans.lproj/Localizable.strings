@@ -8,7 +8,7 @@
 "action.ok" = "好";
 "alert.apply_template.message" = "会替换当前设备和方向里的组件。已做好的其它设备状态会保留。";
 "alert.apply_template.title" = "套用模板？";
-"app.title" = "原型设计测试版";
+"app.title" = "原型设计";
 "button_style.ghost" = "文字";
 "button_style.outline" = "描边";
 "button_style.pill" = "胶囊";

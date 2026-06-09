@@ -8,7 +8,7 @@
 "action.ok" = "好";
 "alert.apply_template.message" = "會替換目前裝置和方向裡的元件。已完成的其它裝置狀態會保留。";
 "alert.apply_template.title" = "套用範本？";
-"app.title" = "原型設計測試版";
+"app.title" = "原型設計";
 "button_style.ghost" = "文字";
 "button_style.outline" = "描邊";
 "button_style.pill" = "膠囊";

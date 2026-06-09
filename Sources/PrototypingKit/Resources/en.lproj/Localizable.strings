@@ -8,7 +8,7 @@
 "action.ok" = "OK";
 "alert.apply_template.message" = "This replaces the components in the current device and orientation. Other filled states are kept.";
 "alert.apply_template.title" = "Apply template?";
-"app.title" = "Prototyping Beta";
+"app.title" = "Prototyping";
 "button_style.ghost" = "Text";
 "button_style.outline" = "Outline";
 "button_style.pill" = "Pill";
