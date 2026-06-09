@@ -623,16 +623,20 @@ public struct PrototypingKitView: View {
                     }
                 }
 
+                let shouldShowTemplateSection = isWide && isTemplateSectionVisible
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         Button(action: {
-                            isTemplateSectionVisible.toggle()
+                            if isWide {
+                                isTemplateSectionVisible.toggle()
+                            }
                         }) {
                             HStack {
                                 Text(PrototypingL10n.text("section.template"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(PrototypingKitColors.secondaryInk)
-                                Image(systemName: isTemplateSectionVisible ? "chevron.up" : "chevron.down")
+                                Image(systemName: shouldShowTemplateSection ? "chevron.up" : "chevron.down")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(PrototypingKitColors.subtleInk)
                             }
@@ -647,7 +651,7 @@ public struct PrototypingKitView: View {
                         }
                     }
 
-                    if isTemplateSectionVisible {
+                    if shouldShowTemplateSection {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
                             ForEach(quickTemplates) { template in
                                 TemplateCard(
