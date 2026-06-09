@@ -1365,8 +1365,9 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
 
         func updateInsets(for scrollView: UIScrollView, margin: CGFloat) {
             currentMargin = margin
-            let horizontal = max(margin, (scrollView.bounds.width - scrollView.contentSize.width) / 2)
-            let vertical = max(margin, (scrollView.bounds.height - scrollView.contentSize.height) / 2)
+            let contentSize = zoomedContentSize(for: scrollView)
+            let horizontal = max(margin, (scrollView.bounds.width - contentSize.width) / 2)
+            let vertical = max(margin, (scrollView.bounds.height - contentSize.height) / 2)
             scrollView.contentInset = UIEdgeInsets(
                 top: vertical,
                 left: horizontal,
@@ -1383,15 +1384,43 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
 
             scrollView.layoutIfNeeded()
             updateInsets(for: scrollView, margin: currentMargin)
-            let offsetX = max(
-                -scrollView.contentInset.left,
-                (scrollView.contentSize.width - scrollView.bounds.width) / 2
+            let contentSize = zoomedContentSize(for: scrollView)
+            let offsetX = centeredOffset(
+                contentLength: contentSize.width,
+                viewportLength: scrollView.bounds.width,
+                leadingInset: scrollView.contentInset.left,
+                trailingInset: scrollView.contentInset.right
             )
-            let offsetY = max(
-                -scrollView.contentInset.top,
-                (scrollView.contentSize.height - scrollView.bounds.height) / 2
+            let offsetY = centeredOffset(
+                contentLength: contentSize.height,
+                viewportLength: scrollView.bounds.height,
+                leadingInset: scrollView.contentInset.top,
+                trailingInset: scrollView.contentInset.bottom
             )
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
+        }
+
+        private func zoomedContentSize(for scrollView: UIScrollView) -> CGSize {
+            if lastCanvasSize.width > 0, lastCanvasSize.height > 0 {
+                return CGSize(
+                    width: lastCanvasSize.width * scrollView.zoomScale,
+                    height: lastCanvasSize.height * scrollView.zoomScale
+                )
+            }
+
+            return containerView?.frame.size ?? .zero
+        }
+
+        private func centeredOffset(
+            contentLength: CGFloat,
+            viewportLength: CGFloat,
+            leadingInset: CGFloat,
+            trailingInset: CGFloat
+        ) -> CGFloat {
+            let minimumOffset = -leadingInset
+            let maximumOffset = max(minimumOffset, contentLength - viewportLength + trailingInset)
+            let centeredOffset = (contentLength - viewportLength) / 2
+            return min(max(centeredOffset, minimumOffset), maximumOffset)
         }
     }
 }
