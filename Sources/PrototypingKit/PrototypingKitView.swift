@@ -104,6 +104,8 @@ public struct PrototypingKitView: View {
     @State private var inspectorExpandedOverride: Bool?
     @State private var activeLibrary: PrototypingLibrarySheet?
     @State private var stagePinchBaseZoom: CGFloat?
+    @State private var stagePinchMagnification: CGFloat = 1
+    @State private var stageSuppressesPinchCentering = false
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
     @AppStorage("PrototypingKit.showTemplateSection.v2") private var isTemplateSectionVisible = true
@@ -333,7 +335,8 @@ public struct PrototypingKitView: View {
     private func stageArea(availableSize: CGSize) -> some View {
         let canvasSize = store.currentDocument.canvasSize.cgSize
         let fitScale = stageFitScale(availableSize: availableSize)
-        let scale = stageZoomMode == "fit" ? fitScale : clampStageZoom(CGFloat(manualStageZoom))
+        let committedScale = stageZoomMode == "fit" ? fitScale : clampStageZoom(CGFloat(manualStageZoom))
+        let scale = stagePinchBaseZoom.map { clampStageZoom($0 * stagePinchMagnification) } ?? committedScale
         let scaledCanvasSize = CGSize(width: canvasSize.width * scale, height: canvasSize.height * scale)
         let contentSize = stageContentSize(
             availableSize: availableSize,
@@ -384,6 +387,8 @@ public struct PrototypingKitView: View {
                     centerStage(scrollProxy, animated: false)
                 }
                 .onChange(of: centerResetID) { _ in
+                    guard stagePinchBaseZoom == nil, !stageSuppressesPinchCentering else { return }
+
                     centerStage(scrollProxy, animated: false)
                 }
             }
@@ -401,10 +406,17 @@ public struct PrototypingKitView: View {
                     stagePinchBaseZoom = currentScale
                 }
 
-                setManualStageZoom((stagePinchBaseZoom ?? currentScale) * value)
+                stagePinchMagnification = value
             }
-            .onEnded { _ in
+            .onEnded { value in
+                let finalScale = clampStageZoom((stagePinchBaseZoom ?? currentScale) * value)
+                stageSuppressesPinchCentering = true
+                setManualStageZoom(finalScale)
+                stagePinchMagnification = 1
                 stagePinchBaseZoom = nil
+                DispatchQueue.main.async {
+                    stageSuppressesPinchCentering = false
+                }
             }
     }
 
@@ -481,9 +493,13 @@ public struct PrototypingKitView: View {
         [
             store.currentDocument.activeBoardID,
             "\(Int(canvasSize.width))x\(Int(canvasSize.height))",
-            "\(Int((scale * 100).rounded()))",
+            "\(stageScaleKey(scale))",
             "\(Int(availableSize.width))x\(Int(availableSize.height))"
         ].joined(separator: "-")
+    }
+
+    private func stageScaleKey(_ scale: CGFloat) -> Int {
+        Int((scale * 100).rounded())
     }
 
     private var stageMargin: CGFloat {
