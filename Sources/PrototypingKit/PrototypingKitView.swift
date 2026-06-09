@@ -245,7 +245,8 @@ public struct PrototypingKitView: View {
 
     private func toolbarInsertCanvasLabel(isCompact: Bool) -> some View {
         HStack(spacing: 6) {
-            InsertCanvasIcon()
+            Image(systemName: "square.on.square.squareshape.controlhandles")
+                .font(.system(size: isCompact ? 22 : 16, weight: .semibold))
                 .frame(width: isCompact ? 24 : 18, height: isCompact ? 24 : 18)
             if !isCompact {
                 Text(PrototypingL10n.text("toolbar.insert_canvas"))
@@ -526,9 +527,9 @@ public struct PrototypingKitView: View {
 
     private var sidebarLauncher: some View {
         Button(action: { isSidebarExpanded = true }) {
-            Image(systemName: "list.bullet.circle")
+            Image(systemName: "list.bullet")
                 .font(.system(size: 19, weight: .semibold))
-                .frame(width: 34, height: 34)
+                .frame(width: 42, height: 34)
             .foregroundColor(PrototypingKitColors.accent)
             .background(PrototypingKitColors.panel.opacity(0.96))
             .overlay(
@@ -1106,52 +1107,6 @@ private func libraryHeader(title: String, onClose: @escaping () -> Void) -> some
     .overlay(Rectangle().fill(PrototypingKitColors.separator).frame(height: 1), alignment: .bottom)
 }
 
-private struct InsertCanvasIcon: View {
-    var body: some View {
-        GeometryReader { proxy in
-            let size = min(proxy.size.width, proxy.size.height)
-            let strokeWidth = max(1.5, size * 0.11)
-            let handleSize = max(3, size * 0.18)
-            let inset = handleSize / 2
-            let rect = CGRect(
-                x: inset,
-                y: inset,
-                width: size - inset * 2,
-                height: size - inset * 2
-            )
-
-            ZStack {
-                RoundedRectangle(cornerRadius: size * 0.12)
-                    .stroke(PrototypingKitColors.ink, lineWidth: strokeWidth)
-                    .frame(width: rect.width, height: rect.height)
-                    .position(x: rect.midX, y: rect.midY)
-
-                RoundedRectangle(cornerRadius: size * 0.10)
-                    .stroke(PrototypingKitColors.ink.opacity(0.72), lineWidth: strokeWidth)
-                    .frame(width: rect.width * 0.52, height: rect.height * 0.52)
-                    .position(x: rect.midX + size * 0.08, y: rect.midY)
-
-                ForEach(Array(handlePoints(in: rect).enumerated()), id: \.offset) { _, point in
-                    Circle()
-                        .fill(PrototypingKitColors.ink)
-                        .frame(width: handleSize, height: handleSize)
-                        .position(point)
-                }
-            }
-            .frame(width: size, height: size)
-        }
-    }
-
-    private func handlePoints(in rect: CGRect) -> [CGPoint] {
-        [
-            CGPoint(x: rect.minX, y: rect.minY),
-            CGPoint(x: rect.maxX, y: rect.minY),
-            CGPoint(x: rect.minX, y: rect.maxY),
-            CGPoint(x: rect.maxX, y: rect.maxY)
-        ]
-    }
-}
-
 @available(iOS 14.0, macCatalyst 14.0, *)
 private struct DraftRecordRow: View {
     let record: PrototypingDraftRecord
@@ -1266,7 +1221,7 @@ private struct DraftTitleRenameField: UIViewRepresentable {
         textField.textColor = UIColor.black.withAlphaComponent(0.86)
         textField.tintColor = UIColor(red: 0.02, green: 0.48, blue: 0.98, alpha: 1)
         textField.returnKeyType = .done
-        textField.clearButtonMode = .whileEditing
+        textField.clearButtonMode = .never
         textField.borderStyle = .none
         textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textField.addTarget(
