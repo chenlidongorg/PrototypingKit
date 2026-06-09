@@ -105,6 +105,7 @@ public struct PrototypingKitView: View {
     @State private var activeLibrary: PrototypingLibrarySheet?
     @State private var stagePinchBaseZoom: CGFloat?
     @State private var stagePinchMagnification: CGFloat = 1
+    @State private var stagePinchCanvasPoint: CGPoint?
     @State private var stageSuppressesPinchCentering = false
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
@@ -380,9 +381,18 @@ public struct PrototypingKitView: View {
                             .id(stageCenterAnchorID)
                     }
                     .frame(width: contentSize.width, height: contentSize.height, alignment: .center)
+                    .background(
+                        PrototypingStagePinchReader { event in
+                            handleStagePinch(
+                                event,
+                                currentScale: committedScale,
+                                canvasSize: canvasSize,
+                                availableSize: availableSize
+                            )
+                        }
+                    )
                 }
                 .background(PrototypingKitColors.canvasSurface)
-                .simultaneousGesture(stagePinchGesture(currentScale: scale))
                 .onAppear {
                     centerStage(scrollProxy, animated: false)
                 }
@@ -399,25 +409,159 @@ public struct PrototypingKitView: View {
         .frame(width: availableSize.width, height: availableSize.height)
     }
 
-    private func stagePinchGesture(currentScale: CGFloat) -> some Gesture {
-        MagnificationGesture(minimumScaleDelta: 0.01)
-            .onChanged { value in
-                if stagePinchBaseZoom == nil {
-                    stagePinchBaseZoom = currentScale
-                }
+    private func handleStagePinch(
+        _ event: PrototypingStagePinchEvent,
+        currentScale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) {
+        switch event.phase {
+        case .began:
+            beginStagePinch(
+                scale: currentScale,
+                location: event.location,
+                scrollView: event.scrollView,
+                canvasSize: canvasSize,
+                availableSize: availableSize
+            )
+        case .changed:
+            updateStagePinch(
+                magnification: event.magnification,
+                location: event.location,
+                scrollView: event.scrollView,
+                currentScale: currentScale,
+                canvasSize: canvasSize,
+                availableSize: availableSize
+            )
+        case .ended:
+            endStagePinch(
+                magnification: event.magnification,
+                location: event.location,
+                scrollView: event.scrollView,
+                currentScale: currentScale,
+                canvasSize: canvasSize,
+                availableSize: availableSize
+            )
+        }
+    }
 
-                stagePinchMagnification = value
-            }
-            .onEnded { value in
-                let finalScale = clampStageZoom((stagePinchBaseZoom ?? currentScale) * value)
-                stageSuppressesPinchCentering = true
-                setManualStageZoom(finalScale)
-                stagePinchMagnification = 1
-                stagePinchBaseZoom = nil
-                DispatchQueue.main.async {
-                    stageSuppressesPinchCentering = false
-                }
-            }
+    private func beginStagePinch(
+        scale: CGFloat,
+        location: CGPoint,
+        scrollView: UIScrollView,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) {
+        stagePinchBaseZoom = scale
+        stagePinchMagnification = 1
+        stagePinchCanvasPoint = stageCanvasPoint(
+            at: location,
+            scrollOffset: scrollView.contentOffset,
+            scale: scale,
+            canvasSize: canvasSize,
+            availableSize: availableSize
+        )
+    }
+
+    private func updateStagePinch(
+        magnification: CGFloat,
+        location: CGPoint,
+        scrollView: UIScrollView,
+        currentScale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) {
+        if stagePinchBaseZoom == nil {
+            beginStagePinch(
+                scale: currentScale,
+                location: location,
+                scrollView: scrollView,
+                canvasSize: canvasSize,
+                availableSize: availableSize
+            )
+        }
+
+        let baseScale = stagePinchBaseZoom ?? currentScale
+        let scale = clampStageZoom(baseScale * magnification)
+        stagePinchMagnification = baseScale > 0 ? scale / baseScale : magnification
+        adjustStagePinchOffset(
+            location: location,
+            scrollView: scrollView,
+            scale: scale,
+            canvasSize: canvasSize,
+            availableSize: availableSize
+        )
+    }
+
+    private func endStagePinch(
+        magnification: CGFloat,
+        location: CGPoint,
+        scrollView: UIScrollView,
+        currentScale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) {
+        let baseScale = stagePinchBaseZoom ?? currentScale
+        let scale = clampStageZoom(baseScale * magnification)
+        stageSuppressesPinchCentering = true
+        setManualStageZoom(scale)
+        stagePinchMagnification = 1
+        adjustStagePinchOffset(
+            location: location,
+            scrollView: scrollView,
+            scale: scale,
+            canvasSize: canvasSize,
+            availableSize: availableSize
+        )
+        stagePinchBaseZoom = nil
+        stagePinchCanvasPoint = nil
+        DispatchQueue.main.async {
+            stageSuppressesPinchCentering = false
+        }
+    }
+
+    private func stageCanvasPoint(
+        at location: CGPoint,
+        scrollOffset: CGPoint,
+        scale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) -> CGPoint {
+        let contentSize = stageContentSize(availableSize: availableSize, canvasSize: canvasSize, scale: scale)
+        let origin = stageCanvasOrigin(contentSize: contentSize, canvasSize: canvasSize, scale: scale)
+        let contentPoint = CGPoint(x: scrollOffset.x + location.x, y: scrollOffset.y + location.y)
+        return CGPoint(
+            x: clamp((contentPoint.x - origin.x) / max(scale, 0.001), min: 0, max: canvasSize.width),
+            y: clamp((contentPoint.y - origin.y) / max(scale, 0.001), min: 0, max: canvasSize.height)
+        )
+    }
+
+    private func adjustStagePinchOffset(
+        location: CGPoint,
+        scrollView: UIScrollView,
+        scale: CGFloat,
+        canvasSize: CGSize,
+        availableSize: CGSize
+    ) {
+        guard let canvasPoint = stagePinchCanvasPoint else { return }
+        let contentSize = stageContentSize(availableSize: availableSize, canvasSize: canvasSize, scale: scale)
+        let origin = stageCanvasOrigin(contentSize: contentSize, canvasSize: canvasSize, scale: scale)
+        let proposedOffset = CGPoint(
+            x: origin.x + canvasPoint.x * scale - location.x,
+            y: origin.y + canvasPoint.y * scale - location.y
+        )
+
+        DispatchQueue.main.async {
+            let maxOffset = CGPoint(
+                x: max(0, contentSize.width - scrollView.bounds.width),
+                y: max(0, contentSize.height - scrollView.bounds.height)
+            )
+            let offset = CGPoint(
+                x: clamp(proposedOffset.x, min: 0, max: maxOffset.x),
+                y: clamp(proposedOffset.y, min: 0, max: maxOffset.y)
+            )
+            scrollView.setContentOffset(offset, animated: false)
+        }
     }
 
     private func stageZoomControls(scale: CGFloat) -> some View {
@@ -485,6 +629,13 @@ public struct PrototypingKitView: View {
         return CGSize(width: width, height: height)
     }
 
+    private func stageCanvasOrigin(contentSize: CGSize, canvasSize: CGSize, scale: CGFloat) -> CGPoint {
+        CGPoint(
+            x: max(0, (contentSize.width - canvasSize.width * scale) / 2),
+            y: max(0, (contentSize.height - canvasSize.height * scale) / 2)
+        )
+    }
+
     private func stageCenterResetID(
         scale: CGFloat,
         canvasSize: CGSize,
@@ -500,6 +651,10 @@ public struct PrototypingKitView: View {
 
     private func stageScaleKey(_ scale: CGFloat) -> Int {
         Int((scale * 100).rounded())
+    }
+
+    private func clamp(_ value: CGFloat, min minimum: CGFloat, max maximum: CGFloat) -> CGFloat {
+        Swift.min(maximum, Swift.max(minimum, value))
     }
 
     private var stageMargin: CGFloat {
@@ -1253,6 +1408,124 @@ private struct DraftRecordRow: View {
         if resolvedTitle != record.title {
             onRename(resolvedTitle)
         }
+    }
+}
+
+private struct PrototypingStagePinchEvent {
+    enum Phase {
+        case began
+        case changed
+        case ended
+    }
+
+    let phase: Phase
+    let magnification: CGFloat
+    let location: CGPoint
+    let scrollView: UIScrollView
+}
+
+private struct PrototypingStagePinchReader: UIViewRepresentable {
+    var onPinch: (PrototypingStagePinchEvent) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPinch: onPinch)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onPinch = onPinch
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: uiView.nearestScrollView)
+        }
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onPinch: (PrototypingStagePinchEvent) -> Void
+        private weak var scrollView: UIScrollView?
+        private weak var pinchRecognizer: UIPinchGestureRecognizer?
+
+        init(onPinch: @escaping (PrototypingStagePinchEvent) -> Void) {
+            self.onPinch = onPinch
+        }
+
+        func attach(to scrollView: UIScrollView?) {
+            guard let scrollView else { return }
+            guard self.scrollView !== scrollView else { return }
+
+            detach()
+
+            let pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+            pinchRecognizer.delegate = self
+            pinchRecognizer.cancelsTouchesInView = false
+            pinchRecognizer.delaysTouchesBegan = false
+            pinchRecognizer.delaysTouchesEnded = false
+            scrollView.addGestureRecognizer(pinchRecognizer)
+
+            self.scrollView = scrollView
+            self.pinchRecognizer = pinchRecognizer
+        }
+
+        func detach() {
+            if let pinchRecognizer, let scrollView {
+                scrollView.removeGestureRecognizer(pinchRecognizer)
+            }
+            pinchRecognizer = nil
+            scrollView = nil
+        }
+
+        @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+            guard let scrollView = scrollView ?? recognizer.view as? UIScrollView else { return }
+
+            let phase: PrototypingStagePinchEvent.Phase
+            switch recognizer.state {
+            case .began:
+                phase = .began
+            case .changed:
+                phase = .changed
+            case .ended, .cancelled, .failed:
+                phase = .ended
+            default:
+                return
+            }
+
+            onPinch(
+                PrototypingStagePinchEvent(
+                    phase: phase,
+                    magnification: recognizer.scale,
+                    location: recognizer.location(in: scrollView),
+                    scrollView: scrollView
+                )
+            )
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+    }
+}
+
+private extension UIView {
+    var nearestScrollView: UIScrollView? {
+        var view = superview
+        while let currentView = view {
+            if let scrollView = currentView as? UIScrollView {
+                return scrollView
+            }
+            view = currentView.superview
+        }
+        return nil
     }
 }
 
