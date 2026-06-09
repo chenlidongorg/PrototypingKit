@@ -582,6 +582,21 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
+                    sectionTitle("按钮样式")
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 54), spacing: 8)], spacing: 8) {
+                        ForEach(PrototypingButtonStyle.allCases) { style in
+                            ButtonStyleSwatch(
+                                style: style,
+                                isSelected: selectedButtonStyle == style
+                            ) {
+                                applyButtonStyleFromUI(style)
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         Button(action: {
                             isGridSectionVisible.toggle()
@@ -646,9 +661,9 @@ public struct PrototypingKitView: View {
     private var availableTemplates: [PrototypingTemplate] {
         switch store.currentDocument.kind {
         case .webPage:
-            return [.blank, .webHome, .landing, .pricing, .dashboard]
+            return PrototypingTemplate.webTemplates
         case .flowNote, .deviceShowcase, .appPage:
-            return [.blank, .list, .detail, .form, .login, .chat, .onboarding, .profile, .settings, .checkout, .tabletDashboard]
+            return PrototypingTemplate.appTemplates
         }
     }
 
@@ -659,11 +674,11 @@ public struct PrototypingKitView: View {
     private var recommendedTemplates: [PrototypingTemplate] {
         switch store.currentDocument.kind {
         case .webPage:
-            return [.blank, .webHome, .landing, .pricing]
+            return [.blank, .webHome, .webSaaS, .dashboard]
         case .deviceShowcase, .flowNote, .appPage:
             return store.currentDocument.device == .tablet
-                ? [.blank, .tabletDashboard, .list, .profile]
-                : [.blank, .list, .detail, .form]
+                ? [.blank, .tabletDashboard, .finance, .kanban]
+                : [.blank, .list, .detail, .mediaFeed]
         }
     }
 
@@ -710,6 +725,11 @@ public struct PrototypingKitView: View {
     private var selectedElement: PrototypingCanvasElement? {
         guard let selectedElementID = singleSelectedElementID else { return nil }
         return store.currentDocument.elements.first { $0.id == selectedElementID }
+    }
+
+    private var selectedButtonStyle: PrototypingButtonStyle? {
+        guard selectedElement?.component == .button else { return nil }
+        return selectedElement?.buttonStyle ?? .primary
     }
 
     private var singleSelectedElementID: String? {
@@ -778,6 +798,17 @@ public struct PrototypingKitView: View {
         rememberComponent(component)
         store.addComponent(component)
         selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
+    }
+
+    private func applyButtonStyleFromUI(_ style: PrototypingButtonStyle) {
+        if let selectedElement, selectedElement.component == .button {
+            store.updateButtonStyle(id: selectedElement.id, style: style)
+            selectedElementIDs = [selectedElement.id]
+        } else {
+            rememberComponent(.button)
+            store.addComponent(.button, buttonStyle: style)
+            selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
+        }
     }
 
     private func rememberTemplate(_ template: PrototypingTemplate) {
@@ -1010,6 +1041,108 @@ private struct ChoiceChip: View {
     }
 }
 
+private struct ButtonStyleSwatch: View {
+    let style: PrototypingButtonStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ButtonStylePreview(style: style)
+                .frame(height: 24)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 7)
+                .background(isSelected ? PrototypingKitColors.accent.opacity(0.12) : PrototypingKitColors.controlSurfaceMuted)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? PrototypingKitColors.accent.opacity(0.55) : PrototypingKitColors.separator, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+private struct ButtonStylePreview: View {
+    let style: PrototypingButtonStyle
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let cornerRadius = style == .pill ? size.height / 2 : min(9, size.height * 0.35)
+            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+            ZStack {
+                shape.fill(fillColor)
+
+                if strokeWidth > 0 {
+                    shape.stroke(strokeColor, lineWidth: strokeWidth)
+                }
+
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(lineColor)
+                    .frame(width: max(16, size.width * lineWidthRatio), height: max(4, size.height * 0.18))
+            }
+        }
+    }
+
+    private var fillColor: Color {
+        switch style {
+        case .primary, .pill:
+            return PrototypingKitColors.accent.opacity(0.80)
+        case .secondary:
+            return PrototypingKitColors.ink.opacity(0.78)
+        case .outline, .ghost:
+            return Color.white.opacity(style == .ghost ? 0 : 0.80)
+        case .soft:
+            return PrototypingKitColors.accent.opacity(0.14)
+        }
+    }
+
+    private var strokeColor: Color {
+        switch style {
+        case .outline:
+            return PrototypingKitColors.accent.opacity(0.78)
+        case .ghost:
+            return PrototypingKitColors.separator
+        default:
+            return Color.clear
+        }
+    }
+
+    private var strokeWidth: CGFloat {
+        switch style {
+        case .outline:
+            return 1.5
+        case .ghost:
+            return 1
+        default:
+            return 0
+        }
+    }
+
+    private var lineColor: Color {
+        switch style {
+        case .primary, .secondary, .pill:
+            return Color.white.opacity(0.86)
+        case .outline, .ghost, .soft:
+            return PrototypingKitColors.accent.opacity(0.70)
+        }
+    }
+
+    private var lineWidthRatio: CGFloat {
+        switch style {
+        case .ghost:
+            return 0.62
+        case .pill:
+            return 0.38
+        default:
+            return 0.46
+        }
+    }
+}
+
 private struct TemplateCard: View {
     let template: PrototypingTemplate
     let isSelected: Bool
@@ -1053,7 +1186,7 @@ private struct TemplateThumbnail: View {
                 Circle().stroke(Color.black.opacity(0.18), lineWidth: 1).frame(width: 22, height: 22)
                 line(width: 54)
                 line(width: 54)
-            } else if template == .dashboard {
+            } else if [.dashboard, .tabletDashboard, .finance, .webDocs].contains(template) {
                 HStack(spacing: 5) {
                     RoundedRectangle(cornerRadius: 3).fill(Color.black.opacity(0.10)).frame(width: 18)
                     VStack(spacing: 5) {
@@ -1065,6 +1198,30 @@ private struct TemplateThumbnail: View {
                         line(width: 52)
                     }
                 }
+            } else if [.pricing, .checkout, .webProduct, .webStatus].contains(template) {
+                HStack(spacing: 5) {
+                    miniCard
+                    miniCard
+                    miniCard
+                }
+                line(width: 62)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(PrototypingKitColors.accent.opacity(0.36))
+                    .frame(width: 42, height: 11)
+            } else if [.calendar, .kanban, .habitTracker].contains(template) {
+                VStack(spacing: 5) {
+                    line(width: 62)
+                    miniCard.frame(height: 16)
+                    miniCard.frame(height: 16)
+                    miniCard.frame(height: 16)
+                }
+            } else if [.mediaFeed, .webGallery, .webPortfolio].contains(template) {
+                HStack(spacing: 5) {
+                    miniImage
+                    miniImage
+                }
+                line(width: 68)
+                line(width: 52)
             } else {
                 line(width: 62)
                 line(width: 72)
@@ -1082,6 +1239,12 @@ private struct TemplateThumbnail: View {
         RoundedRectangle(cornerRadius: 3)
             .stroke(Color.black.opacity(0.14), lineWidth: 1)
             .frame(width: 24, height: 18)
+    }
+
+    private var miniImage: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .stroke(Color.black.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+            .frame(width: 36, height: 28)
     }
 
     private func line(width: CGFloat) -> some View {

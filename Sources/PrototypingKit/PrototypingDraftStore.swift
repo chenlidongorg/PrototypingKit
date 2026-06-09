@@ -180,7 +180,7 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
-    public func addComponent(_ component: PrototypingComponent) {
+    public func addComponent(_ component: PrototypingComponent, buttonStyle: PrototypingButtonStyle? = nil) {
         update { document in
             let baseFrame = PrototypingDraftDocument.defaultFrame(
                 for: component,
@@ -204,12 +204,32 @@ public final class PrototypingDraftStore: ObservableObject {
                     title: component == .aiNote
                         ? PrototypingDraftDocument.annotationTextOrDefault(document.note)
                         : component.title,
-                    frame: frame
+                    frame: frame,
+                    buttonStyle: buttonStyle ?? .primary
                 )
             )
             if !document.enabledComponents.contains(component) {
                 document.enabledComponents.append(component)
             }
+        }
+    }
+
+    public func updateButtonStyle(id: String, style: PrototypingButtonStyle, persist: Bool = true) {
+        guard let index = currentDocument.elements.firstIndex(where: { $0.id == id }),
+              currentDocument.elements[index].component == .button
+        else { return }
+
+        var document = currentDocument
+        document.elements[index].buttonStyle = style
+
+        if persist {
+            document.updatedAt = Date()
+            document.revisionID = UUID().uuidString
+        }
+
+        currentDocument = document
+        if persist {
+            saveCurrentDocument()
         }
     }
 

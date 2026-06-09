@@ -1077,13 +1077,74 @@ private struct PrototypingElementView: View {
     }
 
     private func button(_ size: CGSize) -> some View {
-        RoundedRectangle(cornerRadius: min(12, size.height * 0.28))
-            .fill(Color.blue.opacity(0.78))
-            .overlay(
+        let style = element.buttonStyle ?? .primary
+        let cornerRadius = style == .pill ? size.height / 2 : min(12, size.height * 0.28)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        return ZStack {
+            shape.fill(buttonFillColor(for: style))
+
+            if buttonStrokeWidth(for: style) > 0 {
+                shape.stroke(buttonStrokeColor(for: style), lineWidth: buttonStrokeWidth(for: style))
+            }
+
+            if style == .ghost {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.82))
-                    .frame(width: size.width * 0.42, height: max(6, size.height * 0.16))
-            )
+                    .fill(buttonLineColor(for: style))
+                    .frame(width: size.width * 0.58, height: max(4, size.height * 0.10))
+                    .offset(y: size.height * 0.18)
+            } else {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(buttonLineColor(for: style))
+                    .frame(width: size.width * (style == .pill ? 0.34 : 0.42), height: max(6, size.height * 0.16))
+            }
+        }
+    }
+
+    private func buttonFillColor(for style: PrototypingButtonStyle) -> Color {
+        switch style {
+        case .primary, .pill:
+            return Color.blue.opacity(0.78)
+        case .secondary:
+            return Color.black.opacity(0.72)
+        case .outline:
+            return Color.white.opacity(0.48)
+        case .soft:
+            return Color.blue.opacity(0.14)
+        case .ghost:
+            return Color.clear
+        }
+    }
+
+    private func buttonStrokeColor(for style: PrototypingButtonStyle) -> Color {
+        switch style {
+        case .outline:
+            return Color.blue.opacity(0.70)
+        case .ghost:
+            return Color.black.opacity(0.08)
+        default:
+            return Color.clear
+        }
+    }
+
+    private func buttonStrokeWidth(for style: PrototypingButtonStyle) -> CGFloat {
+        switch style {
+        case .outline:
+            return 1.8
+        case .ghost:
+            return 1
+        default:
+            return 0
+        }
+    }
+
+    private func buttonLineColor(for style: PrototypingButtonStyle) -> Color {
+        switch style {
+        case .primary, .secondary, .pill:
+            return Color.white.opacity(0.82)
+        case .outline, .soft, .ghost:
+            return Color.blue.opacity(0.62)
+        }
     }
 
     private func input(_ size: CGSize) -> some View {
@@ -1410,7 +1471,35 @@ private struct PhoneWireframe: View {
                 chat
             case .detail:
                 detail
-            case .list, .blank, .blankPhone, .blankTablet, .onboarding, .profile, .settings, .checkout, .tabletDashboard, .webHome, .dashboard, .landing, .pricing:
+            case .list,
+                 .blank,
+                 .blankPhone,
+                 .blankTablet,
+                 .onboarding,
+                 .profile,
+                 .settings,
+                 .checkout,
+                 .tabletDashboard,
+                 .calendar,
+                 .kanban,
+                 .mediaFeed,
+                 .finance,
+                 .habitTracker,
+                 .webHome,
+                 .dashboard,
+                 .landing,
+                 .pricing,
+                 .webPortfolio,
+                 .webBlog,
+                 .webDocs,
+                 .webSaaS,
+                 .webAgency,
+                 .webCourse,
+                 .webEvent,
+                 .webProduct,
+                 .webGallery,
+                 .webContact,
+                 .webStatus:
                 list
             }
 
