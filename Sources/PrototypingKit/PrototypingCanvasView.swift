@@ -22,34 +22,6 @@ struct PrototypingExportCanvas: View {
     }
 }
 
-struct PrototypingHostCanvasExportCanvas: View {
-    let document: PrototypingDraftDocument
-    let hostCanvasSize: CGSize
-
-    private var exportSize: CGSize {
-        PrototypingExportCanvas.outputSize(for: document)
-    }
-
-    private var contentScale: CGFloat {
-        min(
-            hostCanvasSize.width / max(1, exportSize.width),
-            hostCanvasSize.height / max(1, exportSize.height)
-        )
-    }
-
-    var body: some View {
-        ZStack {
-            Color.white
-            PrototypingExportCanvas(document: document)
-                .frame(width: exportSize.width, height: exportSize.height)
-                .scaleEffect(contentScale)
-        }
-        .frame(width: hostCanvasSize.width, height: hostCanvasSize.height)
-        .background(Color.white)
-        .clipped()
-    }
-}
-
 struct PrototypingDraftCanvas: View {
     let document: PrototypingDraftDocument
     var showsGrid = true

@@ -94,7 +94,6 @@ private extension PrototypingButtonStyle {
 @available(iOS 14.0, macCatalyst 14.0, *)
 public struct PrototypingKitView: View {
     @ObservedObject private var store: PrototypingDraftStore
-    private let hostCanvasSize: CGSize?
     private let onExport: (PrototypingExportResult) -> Void
     private let onClose: () -> Void
 
@@ -114,12 +113,10 @@ public struct PrototypingKitView: View {
     @MainActor
     public init(
         store: PrototypingDraftStore? = nil,
-        hostCanvasSize: CGSize? = nil,
         onExport: @escaping (PrototypingExportResult) -> Void,
         onClose: @escaping () -> Void = {}
     ) {
         self.store = store ?? PrototypingDraftStore()
-        self.hostCanvasSize = hostCanvasSize
         self.onExport = onExport
         self.onClose = onClose
     }
@@ -1033,10 +1030,7 @@ public struct PrototypingKitView: View {
     }
 
     private func insertIntoHost() {
-        onExport(store.exportImage(
-            recommendedIntent: .setAsBackground,
-            hostCanvasSize: hostCanvasSize
-        ))
+        onExport(store.exportImage(recommendedIntent: .setAsBackground))
     }
 
     private func exportPDF(recommendedIntent: PrototypingImportIntent) {
