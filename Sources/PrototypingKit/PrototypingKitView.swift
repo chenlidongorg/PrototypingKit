@@ -104,6 +104,7 @@ public struct PrototypingKitView: View {
     @State private var inspectorExpandedOverride: Bool?
     @State private var activeLibrary: PrototypingLibrarySheet?
     @State private var stageRecenterRequestID = 0
+    @State private var shouldCollapseInspectorAfterTemplateApply = false
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
     @AppStorage("PrototypingKit.showTemplateSection.v2") private var isTemplateSectionVisible = true
@@ -152,8 +153,11 @@ public struct PrototypingKitView: View {
                     message: Text(PrototypingL10n.text("alert.apply_template.message")),
                     primaryButton: .destructive(Text(PrototypingL10n.text("action.apply"))) {
                         commitTemplate(template)
+                        collapseInspectorAfterPendingTemplateApply()
                     },
-                    secondaryButton: .cancel(Text(PrototypingL10n.text("action.cancel")))
+                    secondaryButton: .cancel(Text(PrototypingL10n.text("action.cancel"))) {
+                        shouldCollapseInspectorAfterTemplateApply = false
+                    }
                 )
             }
         }
@@ -282,7 +286,7 @@ public struct PrototypingKitView: View {
                     if inspectorIsExpanded && isWide {
                         Divider()
 
-                        inspector
+                        inspector(isWide: isWide)
                             .frame(width: inspectorWidth)
                     }
                 }
@@ -313,7 +317,7 @@ public struct PrototypingKitView: View {
                             inspectorExpandedOverride = false
                         }
 
-                    inspector
+                    inspector(isWide: isWide)
                         .frame(width: inspectorWidth)
                         .frame(maxHeight: .infinity)
                         .background(PrototypingKitColors.panel)
@@ -540,7 +544,7 @@ public struct PrototypingKitView: View {
         .accessibilityLabel(PrototypingL10n.text("launcher.tools"))
     }
 
-    private var inspector: some View {
+    private func inspector(isWide: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
@@ -567,11 +571,13 @@ public struct PrototypingKitView: View {
                 HStack {
                     ChoiceChip(title: PrototypingL10n.text("action.multi_select"), isSelected: isMultiSelectionEnabled) {
                         toggleMultiSelection()
+                        collapseInspectorAfterCompactToolAction(isWide: isWide)
                     }
                     .frame(width: 78)
 
                     ChoiceChip(title: PrototypingL10n.text("action.annotation"), isSelected: selectedElement?.component == .aiNote) {
                         addAnnotationFromUI()
+                        collapseInspectorAfterCompactToolAction(isWide: isWide)
                     }
                     .frame(width: 78)
 
@@ -586,6 +592,7 @@ public struct PrototypingKitView: View {
                             ChoiceChip(title: kind.title, isSelected: store.currentDocument.kind == kind) {
                                 selectedElementIDs = []
                                 store.applyKind(kind)
+                                collapseInspectorAfterCompactToolAction(isWide: isWide)
                             }
                         }
                     }
@@ -609,6 +616,7 @@ public struct PrototypingKitView: View {
                                 ChoiceChip(title: orientation.title, isSelected: store.currentDocument.orientation == orientation) {
                                     selectedElementIDs = []
                                     store.applyOrientation(orientation)
+                                    collapseInspectorAfterCompactToolAction(isWide: isWide)
                                 }
                             }
                         }
@@ -647,7 +655,7 @@ public struct PrototypingKitView: View {
                                     isSelected: store.currentDocument.template == template,
                                     previewContext: templatePreviewContext(for: template)
                                 ) {
-                                    applyTemplateFromUI(template)
+                                    applyTemplateFromUI(template, isWide: isWide)
                                 }
                             }
                         }
@@ -670,6 +678,7 @@ public struct PrototypingKitView: View {
                                 isSelected: isSelectedComponentItem(item)
                             ) {
                                 addComponentFromUI(item)
+                                collapseInspectorAfterCompactToolAction(isWide: isWide)
                             }
                         }
                     }
@@ -704,6 +713,7 @@ public struct PrototypingKitView: View {
                                 ) {
                                     selectedElementIDs = []
                                     store.updateGridSize(gridSize)
+                                    collapseInspectorAfterCompactToolAction(isWide: isWide)
                                 }
                             }
                         }
@@ -721,7 +731,7 @@ public struct PrototypingKitView: View {
                     previewContext: templatePreviewContext(for:),
                     onClose: { activeLibrary = nil },
                     onSelect: { template in
-                        selectTemplateFromLibrary(template)
+                        selectTemplateFromLibrary(template, isWide: isWide)
                     }
                 )
             case .components:
@@ -732,6 +742,7 @@ public struct PrototypingKitView: View {
                     onSelect: { item in
                         activeLibrary = nil
                         addComponentFromUI(item)
+                        collapseInspectorAfterCompactToolAction(isWide: isWide)
                     }
                 )
             }
@@ -900,25 +911,39 @@ public struct PrototypingKitView: View {
         isSidebarExpanded = false
     }
 
-    private func applyTemplateFromUI(_ template: PrototypingTemplate) {
+    private func applyTemplateFromUI(_ template: PrototypingTemplate, isWide: Bool) {
         selectedElementIDs = []
         if store.currentDocument.elements.isEmpty {
             commitTemplate(template)
+            collapseInspectorAfterCompactToolAction(isWide: isWide)
         } else {
+            shouldCollapseInspectorAfterTemplateApply = !isWide
             activeAlert = .applyTemplate(template)
         }
     }
 
-    private func selectTemplateFromLibrary(_ template: PrototypingTemplate) {
+    private func selectTemplateFromLibrary(_ template: PrototypingTemplate, isWide: Bool) {
         activeLibrary = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            applyTemplateFromUI(template)
+            applyTemplateFromUI(template, isWide: isWide)
         }
     }
 
     private func commitTemplate(_ template: PrototypingTemplate) {
         rememberTemplate(template)
         store.applyTemplate(template)
+    }
+
+    private func collapseInspectorAfterPendingTemplateApply() {
+        if shouldCollapseInspectorAfterTemplateApply {
+            inspectorExpandedOverride = false
+        }
+        shouldCollapseInspectorAfterTemplateApply = false
+    }
+
+    private func collapseInspectorAfterCompactToolAction(isWide: Bool) {
+        guard !isWide else { return }
+        inspectorExpandedOverride = false
     }
 
     private func addComponentFromUI(_ item: PrototypingComponentItem) {
