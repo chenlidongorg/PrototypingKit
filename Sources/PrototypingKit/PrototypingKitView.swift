@@ -109,36 +109,37 @@ public struct PrototypingKitView: View {
                 .foregroundColor(PrototypingKitColors.ink)
                 .textFieldStyle(PlainTextFieldStyle())
 
-            HStack(spacing: 8) {
+            HStack(spacing: 22) {
                 Button(action: createDraft) {
                     Label("新建", systemImage: "plus")
-                }
-            }
-            .padding(.horizontal, 4)
-
-            HStack(spacing: 8) {
-                Button(action: insertIntoHost) {
-                    Label("插入画布", systemImage: "square.and.arrow.down")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(PrototypingKitColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Menu {
-                    Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
-                        Label("保存 PDF", systemImage: "doc.badge.plus")
-                    }
-                    Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
-                        Label("分享 PDF", systemImage: "square.and.arrow.up")
-                    }
-                } label: {
-                    Label("导出", systemImage: "square.and.arrow.up")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(PrototypingKitColors.ink)
+                }
+
+                HStack(spacing: 12) {
+                    Button(action: insertIntoHost) {
+                        HStack(spacing: 6) {
+                            InsertCanvasIcon()
+                                .frame(width: 18, height: 18)
+                            Text("放进画布")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(PrototypingKitColors.ink)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    Menu {
+                        Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
+                            Label("保存 PDF", systemImage: "doc.badge.plus")
+                        }
+                        Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
+                            Label("分享 PDF", systemImage: "square.and.arrow.up")
+                        }
+                    } label: {
+                        Label("导出", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(PrototypingKitColors.ink)
+                    }
                 }
             }
         }
@@ -492,13 +493,11 @@ public struct PrototypingKitView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle(store.currentDocument.kind == .webPage ? "画布" : "设备")
+                if store.currentDocument.kind != .webPage {
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("设备")
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
-                        if store.currentDocument.kind == .webPage {
-                            ChoiceChip(title: "Web画布", isSelected: true) {}
-                        } else {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                             ForEach(PrototypingDeviceKind.allCases) { device in
                                 ChoiceChip(title: device.title, isSelected: store.currentDocument.device == device) {
                                     selectedElementIDs = []
@@ -506,9 +505,7 @@ public struct PrototypingKitView: View {
                                 }
                             }
                         }
-                    }
 
-                    if store.currentDocument.kind != .webPage {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                             ForEach(PrototypingDeviceOrientation.allCases) { orientation in
                                 ChoiceChip(title: orientation.title, isSelected: store.currentDocument.orientation == orientation) {
@@ -540,9 +537,11 @@ public struct PrototypingKitView: View {
                         Spacer()
 
                         Button(action: { activeLibrary = .templates }) {
-                            Label("更多", systemImage: "ellipsis.circle")
-                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 28, height: 28)
                         }
+                        .accessibilityLabel(Text("更多模板"))
                         .buttonStyle(PlainButtonStyle())
                     }
 
@@ -562,9 +561,11 @@ public struct PrototypingKitView: View {
                         sectionTitle("常用组件")
                         Spacer()
                         Button(action: { activeLibrary = .components }) {
-                            Label("更多", systemImage: "ellipsis.circle")
-                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 28, height: 28)
                         }
+                        .accessibilityLabel(Text("更多组件"))
                         .buttonStyle(PlainButtonStyle())
                     }
 
@@ -581,8 +582,23 @@ public struct PrototypingKitView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    DisclosureHeader(title: "网格", isExpanded: isGridSectionVisible) {
-                        isGridSectionVisible.toggle()
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            isGridSectionVisible.toggle()
+                        }) {
+                            HStack {
+                                Text("网格")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(PrototypingKitColors.secondaryInk)
+                                Image(systemName: isGridSectionVisible ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(PrototypingKitColors.subtleInk)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
+                        Spacer()
                     }
 
                     if isGridSectionVisible {
@@ -659,7 +675,7 @@ public struct PrototypingKitView: View {
     }
 
     private var quickComponents: [PrototypingComponent] {
-        Array(uniqueComponents(recentComponents + recommendedComponents).prefix(9))
+        Array(uniqueComponents(recentComponents + recommendedComponents).prefix(8))
     }
 
     private var recommendedComponents: [PrototypingComponent] {
@@ -891,25 +907,49 @@ private func libraryHeader(title: String, onClose: @escaping () -> Void) -> some
     .overlay(Rectangle().fill(PrototypingKitColors.separator).frame(height: 1), alignment: .bottom)
 }
 
-private struct DisclosureHeader: View {
-    let title: String
-    let isExpanded: Bool
-    let action: () -> Void
-
+private struct InsertCanvasIcon: View {
     var body: some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(PrototypingKitColors.secondaryInk)
-                Spacer()
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(PrototypingKitColors.subtleInk)
+        GeometryReader { proxy in
+            let size = min(proxy.size.width, proxy.size.height)
+            let strokeWidth = max(1.5, size * 0.11)
+            let handleSize = max(3, size * 0.18)
+            let inset = handleSize / 2
+            let rect = CGRect(
+                x: inset,
+                y: inset,
+                width: size - inset * 2,
+                height: size - inset * 2
+            )
+
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.12)
+                    .stroke(PrototypingKitColors.ink, lineWidth: strokeWidth)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+
+                RoundedRectangle(cornerRadius: size * 0.10)
+                    .stroke(PrototypingKitColors.ink.opacity(0.72), lineWidth: strokeWidth)
+                    .frame(width: rect.width * 0.52, height: rect.height * 0.52)
+                    .position(x: rect.midX + size * 0.08, y: rect.midY)
+
+                ForEach(Array(handlePoints(in: rect).enumerated()), id: \.offset) { _, point in
+                    Circle()
+                        .fill(PrototypingKitColors.ink)
+                        .frame(width: handleSize, height: handleSize)
+                        .position(point)
+                }
             }
-            .contentShape(Rectangle())
+            .frame(width: size, height: size)
         }
-        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func handlePoints(in rect: CGRect) -> [CGPoint] {
+        [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.minX, y: rect.maxY),
+            CGPoint(x: rect.maxX, y: rect.maxY)
+        ]
     }
 }
 
