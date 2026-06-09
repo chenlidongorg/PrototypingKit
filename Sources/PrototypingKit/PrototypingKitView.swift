@@ -103,6 +103,7 @@ public struct PrototypingKitView: View {
     @State private var isSidebarExpanded = false
     @State private var inspectorExpandedOverride: Bool?
     @State private var activeLibrary: PrototypingLibrarySheet?
+    @State private var stagePinchBaseZoom: CGFloat?
     @AppStorage("PrototypingKit.recentTemplateIDs") private var recentTemplateIDs = ""
     @AppStorage("PrototypingKit.recentComponentIDs") private var recentComponentIDs = ""
     @AppStorage("PrototypingKit.showTemplateSection.v2") private var isTemplateSectionVisible = true
@@ -378,6 +379,7 @@ public struct PrototypingKitView: View {
                     .frame(width: contentSize.width, height: contentSize.height, alignment: .center)
                 }
                 .background(PrototypingKitColors.canvasSurface)
+                .simultaneousGesture(stagePinchGesture(currentScale: scale))
                 .onAppear {
                     centerStage(scrollProxy, animated: false)
                 }
@@ -390,6 +392,20 @@ public struct PrototypingKitView: View {
                 .padding(.bottom, 18)
         }
         .frame(width: availableSize.width, height: availableSize.height)
+    }
+
+    private func stagePinchGesture(currentScale: CGFloat) -> some Gesture {
+        MagnificationGesture(minimumScaleDelta: 0.01)
+            .onChanged { value in
+                if stagePinchBaseZoom == nil {
+                    stagePinchBaseZoom = currentScale
+                }
+
+                setManualStageZoom((stagePinchBaseZoom ?? currentScale) * value)
+            }
+            .onEnded { _ in
+                stagePinchBaseZoom = nil
+            }
     }
 
     private func stageZoomControls(scale: CGFloat) -> some View {
