@@ -34,6 +34,59 @@ private enum PrototypingKitAlert: Identifiable {
     }
 }
 
+private struct TemplatePreviewContext {
+    let kind: PrototypingDraftKind
+    let device: PrototypingDeviceKind
+    let orientation: PrototypingDeviceOrientation
+    let canvasSize: PrototypingCanvasSize
+}
+
+private struct PrototypingComponentItem: Identifiable, Hashable {
+    let component: PrototypingComponent
+    let buttonStyle: PrototypingButtonStyle?
+
+    var id: String {
+        if let buttonStyle {
+            return "button.\(buttonStyle.rawValue)"
+        }
+        return component.rawValue
+    }
+
+    var title: String {
+        guard component == .button, let buttonStyle else {
+            return component.title
+        }
+        return "按钮-\(buttonStyle.componentTitle)"
+    }
+
+    static func component(_ component: PrototypingComponent) -> PrototypingComponentItem {
+        PrototypingComponentItem(component: component, buttonStyle: nil)
+    }
+
+    static func button(_ style: PrototypingButtonStyle) -> PrototypingComponentItem {
+        PrototypingComponentItem(component: .button, buttonStyle: style)
+    }
+}
+
+private extension PrototypingButtonStyle {
+    var componentTitle: String {
+        switch self {
+        case .primary:
+            return "圆角"
+        case .secondary:
+            return "深色"
+        case .outline:
+            return "描边"
+        case .soft:
+            return "浅色"
+        case .ghost:
+            return "文字"
+        case .pill:
+            return "胶囊"
+        }
+    }
+}
+
 @available(iOS 14.0, macCatalyst 14.0, *)
 public struct PrototypingKitView: View {
     @ObservedObject private var store: PrototypingDraftStore
@@ -477,6 +530,11 @@ public struct PrototypingKitView: View {
                     }
                     .frame(width: 78)
 
+                    ChoiceChip(title: "注释", isSelected: selectedElement?.component == .aiNote) {
+                        addAnnotationFromUI()
+                    }
+                    .frame(width: 78)
+
                     Spacer()
                 }
 
@@ -536,19 +594,19 @@ public struct PrototypingKitView: View {
 
                         Spacer()
 
-                        Button(action: { activeLibrary = .templates }) {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .semibold))
-                                .frame(width: 28, height: 28)
+                        MoreIconButton {
+                            activeLibrary = .templates
                         }
-                        .accessibilityLabel(Text("更多模板"))
-                        .buttonStyle(PlainButtonStyle())
                     }
 
                     if isTemplateSectionVisible {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
                             ForEach(quickTemplates) { template in
-                                TemplateCard(template: template, isSelected: store.currentDocument.template == template) {
+                                TemplateCard(
+                                    template: template,
+                                    isSelected: store.currentDocument.template == template,
+                                    previewContext: templatePreviewContext(for: template)
+                                ) {
                                     applyTemplateFromUI(template)
                                 }
                             }
@@ -560,37 +618,18 @@ public struct PrototypingKitView: View {
                     HStack {
                         sectionTitle("常用组件")
                         Spacer()
-                        Button(action: { activeLibrary = .components }) {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .semibold))
-                                .frame(width: 28, height: 28)
+                        MoreIconButton {
+                            activeLibrary = .components
                         }
-                        .accessibilityLabel(Text("更多组件"))
-                        .buttonStyle(PlainButtonStyle())
                     }
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-                        ForEach(quickComponents) { component in
+                        ForEach(quickComponentItems) { item in
                             ChoiceChip(
-                                title: component.title,
-                                isSelected: selectedElement?.component == component
+                                title: item.title,
+                                isSelected: isSelectedComponentItem(item)
                             ) {
-                                addComponentFromUI(component)
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("按钮样式")
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 54), spacing: 8)], spacing: 8) {
-                        ForEach(PrototypingButtonStyle.allCases) { style in
-                            ButtonStyleSwatch(
-                                style: style,
-                                isSelected: selectedButtonStyle == style
-                            ) {
-                                applyButtonStyleFromUI(style)
+                                addComponentFromUI(item)
                             }
                         }
                     }
@@ -639,6 +678,7 @@ public struct PrototypingKitView: View {
                 TemplateLibraryView(
                     templates: availableTemplates,
                     selectedTemplate: store.currentDocument.template,
+                    previewContext: templatePreviewContext(for:),
                     onClose: { activeLibrary = nil },
                     onSelect: { template in
                         selectTemplateFromLibrary(template)
@@ -646,12 +686,12 @@ public struct PrototypingKitView: View {
                 )
             case .components:
                 ComponentLibraryView(
-                    components: PrototypingComponent.allCases,
-                    selectedComponent: selectedElement?.component,
+                    items: allComponentItems,
+                    selectedItem: selectedComponentItem,
                     onClose: { activeLibrary = nil },
-                    onSelect: { component in
+                    onSelect: { item in
                         activeLibrary = nil
-                        addComponentFromUI(component)
+                        addComponentFromUI(item)
                     }
                 )
             }
@@ -682,6 +722,24 @@ public struct PrototypingKitView: View {
         }
     }
 
+    private func templatePreviewContext(for template: PrototypingTemplate) -> TemplatePreviewContext {
+        let targetKind: PrototypingDraftKind = template.kind == .webPage
+            ? .webPage
+            : store.currentDocument.kind.normalized
+        let targetDevice = template.preferredDevice ?? store.currentDocument.device
+        let targetOrientation = store.currentDocument.orientation
+        let canvasSize = targetKind == .webPage
+            ? PrototypingCanvasSize.web
+            : targetDevice.canvasSize(for: targetOrientation)
+
+        return TemplatePreviewContext(
+            kind: targetKind,
+            device: targetDevice,
+            orientation: targetOrientation,
+            canvasSize: canvasSize
+        )
+    }
+
     private var recentTemplates: [PrototypingTemplate] {
         recentTemplateIDs
             .split(separator: ",")
@@ -689,22 +747,47 @@ public struct PrototypingKitView: View {
             .filter { availableTemplates.contains($0) }
     }
 
-    private var quickComponents: [PrototypingComponent] {
-        Array(uniqueComponents(recentComponents + recommendedComponents).prefix(8))
+    private var quickComponentItems: [PrototypingComponentItem] {
+        Array(uniqueComponentItems(recentComponentItems + recommendedComponentItems).prefix(8))
     }
 
-    private var recommendedComponents: [PrototypingComponent] {
+    private var recommendedComponentItems: [PrototypingComponentItem] {
         if store.currentDocument.kind == .webPage {
-            return [.title, .subtitle, .button, .topNavigation, .card, .chart, .table, .tag, .aiNote]
+            return [
+                .component(.title),
+                .component(.subtitle),
+                .button(.primary),
+                .button(.outline),
+                .component(.topNavigation),
+                .component(.card),
+                .component(.chart),
+                .component(.table)
+            ]
         }
 
-        return [.title, .button, .input, .search, .card, .listRow, .imagePlaceholder, .bottomNavigation, .aiNote]
+        return [
+            .component(.title),
+            .button(.primary),
+            .button(.pill),
+            .component(.input),
+            .component(.search),
+            .component(.card),
+            .component(.listRow),
+            .component(.imagePlaceholder)
+        ]
     }
 
-    private var recentComponents: [PrototypingComponent] {
+    private var recentComponentItems: [PrototypingComponentItem] {
         recentComponentIDs
             .split(separator: ",")
-            .compactMap { PrototypingComponent(rawValue: String($0)) }
+            .compactMap { componentItem(rawValue: String($0)) }
+    }
+
+    private var allComponentItems: [PrototypingComponentItem] {
+        PrototypingButtonStyle.allCases.map(PrototypingComponentItem.button)
+            + PrototypingComponent.allCases
+                .filter { $0 != .button && $0 != .aiNote }
+                .map(PrototypingComponentItem.component)
     }
 
     private var gridSizeOptions: [Double] {
@@ -727,9 +810,13 @@ public struct PrototypingKitView: View {
         return store.currentDocument.elements.first { $0.id == selectedElementID }
     }
 
-    private var selectedButtonStyle: PrototypingButtonStyle? {
-        guard selectedElement?.component == .button else { return nil }
-        return selectedElement?.buttonStyle ?? .primary
+    private var selectedComponentItem: PrototypingComponentItem? {
+        guard let selectedElement else { return nil }
+        if selectedElement.component == .button {
+            return .button(selectedElement.buttonStyle ?? .primary)
+        }
+        guard selectedElement.component != .aiNote else { return nil }
+        return .component(selectedElement.component)
     }
 
     private var singleSelectedElementID: String? {
@@ -794,29 +881,38 @@ public struct PrototypingKitView: View {
         store.applyTemplate(template)
     }
 
+    private func addComponentFromUI(_ item: PrototypingComponentItem) {
+        if item.component == .button,
+           let style = item.buttonStyle,
+           let selectedElement,
+           selectedElement.component == .button
+        {
+            rememberComponent(item)
+            store.updateButtonStyle(id: selectedElement.id, style: style)
+            selectedElementIDs = [selectedElement.id]
+            return
+        }
+
+        rememberComponent(item)
+        store.addComponent(item.component, buttonStyle: item.buttonStyle)
+        selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
+    }
+
     private func addComponentFromUI(_ component: PrototypingComponent) {
-        rememberComponent(component)
         store.addComponent(component)
         selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
     }
 
-    private func applyButtonStyleFromUI(_ style: PrototypingButtonStyle) {
-        if let selectedElement, selectedElement.component == .button {
-            store.updateButtonStyle(id: selectedElement.id, style: style)
-            selectedElementIDs = [selectedElement.id]
-        } else {
-            rememberComponent(.button)
-            store.addComponent(.button, buttonStyle: style)
-            selectedElementIDs = store.currentDocument.elements.last.map { [$0.id] } ?? []
-        }
+    private func addAnnotationFromUI() {
+        addComponentFromUI(.aiNote)
     }
 
     private func rememberTemplate(_ template: PrototypingTemplate) {
         recentTemplateIDs = prepending(template.rawValue, to: recentTemplateIDs, limit: 8)
     }
 
-    private func rememberComponent(_ component: PrototypingComponent) {
-        recentComponentIDs = prepending(component.rawValue, to: recentComponentIDs, limit: 12)
+    private func rememberComponent(_ item: PrototypingComponentItem) {
+        recentComponentIDs = prepending(item.id, to: recentComponentIDs, limit: 12)
     }
 
     private func prepending(_ value: String, to rawValue: String, limit: Int) -> String {
@@ -832,12 +928,29 @@ public struct PrototypingKitView: View {
         return result
     }
 
-    private func uniqueComponents(_ components: [PrototypingComponent]) -> [PrototypingComponent] {
-        var result: [PrototypingComponent] = []
-        for component in components where !result.contains(component) {
-            result.append(component)
+    private func uniqueComponentItems(_ items: [PrototypingComponentItem]) -> [PrototypingComponentItem] {
+        var result: [PrototypingComponentItem] = []
+        for item in items where !result.contains(item) && item.component != .aiNote {
+            result.append(item)
         }
         return result
+    }
+
+    private func componentItem(rawValue: String) -> PrototypingComponentItem? {
+        if rawValue.hasPrefix("button.") {
+            let styleRawValue = String(rawValue.dropFirst("button.".count))
+            return PrototypingButtonStyle(rawValue: styleRawValue).map(PrototypingComponentItem.button)
+        }
+
+        guard let component = PrototypingComponent(rawValue: rawValue),
+              component != .button,
+              component != .aiNote
+        else { return nil }
+        return .component(component)
+    }
+
+    private func isSelectedComponentItem(_ item: PrototypingComponentItem) -> Bool {
+        selectedComponentItem == item
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -869,6 +982,7 @@ public struct PrototypingKitView: View {
 private struct TemplateLibraryView: View {
     let templates: [PrototypingTemplate]
     let selectedTemplate: PrototypingTemplate
+    let previewContext: (PrototypingTemplate) -> TemplatePreviewContext
     let onClose: () -> Void
     let onSelect: (PrototypingTemplate) -> Void
 
@@ -879,7 +993,11 @@ private struct TemplateLibraryView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 12)], spacing: 12) {
                     ForEach(templates) { template in
-                        TemplateCard(template: template, isSelected: selectedTemplate == template) {
+                        TemplateCard(
+                            template: template,
+                            isSelected: selectedTemplate == template,
+                            previewContext: previewContext(template)
+                        ) {
                             onSelect(template)
                         }
                     }
@@ -894,10 +1012,10 @@ private struct TemplateLibraryView: View {
 
 @available(iOS 14.0, macCatalyst 14.0, *)
 private struct ComponentLibraryView: View {
-    let components: [PrototypingComponent]
-    let selectedComponent: PrototypingComponent?
+    let items: [PrototypingComponentItem]
+    let selectedItem: PrototypingComponentItem?
     let onClose: () -> Void
-    let onSelect: (PrototypingComponent) -> Void
+    let onSelect: (PrototypingComponentItem) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -905,9 +1023,9 @@ private struct ComponentLibraryView: View {
 
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 98), spacing: 8)], spacing: 8) {
-                    ForEach(components) { component in
-                        ChoiceChip(title: component.title, isSelected: selectedComponent == component) {
-                            onSelect(component)
+                    ForEach(items) { item in
+                        ChoiceChip(title: item.title, isSelected: selectedItem == item) {
+                            onSelect(item)
                         }
                     }
                 }
@@ -1041,117 +1159,31 @@ private struct ChoiceChip: View {
     }
 }
 
-private struct ButtonStyleSwatch: View {
-    let style: PrototypingButtonStyle
-    let isSelected: Bool
+private struct MoreIconButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            ButtonStylePreview(style: style)
-                .frame(height: 24)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 7)
-                .background(isSelected ? PrototypingKitColors.accent.opacity(0.12) : PrototypingKitColors.controlSurfaceMuted)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? PrototypingKitColors.accent.opacity(0.55) : PrototypingKitColors.separator, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(PrototypingKitColors.secondaryInk)
+                .frame(width: 44, height: 36)
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-    }
-}
-
-private struct ButtonStylePreview: View {
-    let style: PrototypingButtonStyle
-
-    var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let cornerRadius = style == .pill ? size.height / 2 : min(9, size.height * 0.35)
-            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-            ZStack {
-                shape.fill(fillColor)
-
-                if strokeWidth > 0 {
-                    shape.stroke(strokeColor, lineWidth: strokeWidth)
-                }
-
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(lineColor)
-                    .frame(width: max(16, size.width * lineWidthRatio), height: max(4, size.height * 0.18))
-            }
-        }
-    }
-
-    private var fillColor: Color {
-        switch style {
-        case .primary, .pill:
-            return PrototypingKitColors.accent.opacity(0.80)
-        case .secondary:
-            return PrototypingKitColors.ink.opacity(0.78)
-        case .outline, .ghost:
-            return Color.white.opacity(style == .ghost ? 0 : 0.80)
-        case .soft:
-            return PrototypingKitColors.accent.opacity(0.14)
-        }
-    }
-
-    private var strokeColor: Color {
-        switch style {
-        case .outline:
-            return PrototypingKitColors.accent.opacity(0.78)
-        case .ghost:
-            return PrototypingKitColors.separator
-        default:
-            return Color.clear
-        }
-    }
-
-    private var strokeWidth: CGFloat {
-        switch style {
-        case .outline:
-            return 1.5
-        case .ghost:
-            return 1
-        default:
-            return 0
-        }
-    }
-
-    private var lineColor: Color {
-        switch style {
-        case .primary, .secondary, .pill:
-            return Color.white.opacity(0.86)
-        case .outline, .ghost, .soft:
-            return PrototypingKitColors.accent.opacity(0.70)
-        }
-    }
-
-    private var lineWidthRatio: CGFloat {
-        switch style {
-        case .ghost:
-            return 0.62
-        case .pill:
-            return 0.38
-        default:
-            return 0.46
-        }
     }
 }
 
 private struct TemplateCard: View {
     let template: PrototypingTemplate
     let isSelected: Bool
+    let previewContext: TemplatePreviewContext
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                TemplateThumbnail(template: template)
+                TemplateThumbnail(template: template, previewContext: previewContext)
                     .frame(height: 78)
                 Text(template.title)
                     .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
@@ -1173,83 +1205,35 @@ private struct TemplateCard: View {
 
 private struct TemplateThumbnail: View {
     let template: PrototypingTemplate
+    let previewContext: TemplatePreviewContext
 
     var body: some View {
-        VStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(Color.black.opacity(0.22))
-                .frame(width: 44, height: 6)
+        GeometryReader { proxy in
+            let document = previewDocument
+            let canvasSize = document.canvasSize.cgSize
+            let scale = min(proxy.size.width / canvasSize.width, proxy.size.height / canvasSize.height)
+            let previewSize = CGSize(width: canvasSize.width * scale, height: canvasSize.height * scale)
 
-            if template == .blank {
-                Spacer(minLength: 0)
-            } else if template == .login {
-                Circle().stroke(Color.black.opacity(0.18), lineWidth: 1).frame(width: 22, height: 22)
-                line(width: 54)
-                line(width: 54)
-            } else if [.dashboard, .tabletDashboard, .finance, .webDocs].contains(template) {
-                HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 3).fill(Color.black.opacity(0.10)).frame(width: 18)
-                    VStack(spacing: 5) {
-                        HStack(spacing: 5) {
-                            miniCard
-                            miniCard
-                        }
-                        line(width: 52)
-                        line(width: 52)
-                    }
-                }
-            } else if [.pricing, .checkout, .webProduct, .webStatus].contains(template) {
-                HStack(spacing: 5) {
-                    miniCard
-                    miniCard
-                    miniCard
-                }
-                line(width: 62)
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(PrototypingKitColors.accent.opacity(0.36))
-                    .frame(width: 42, height: 11)
-            } else if [.calendar, .kanban, .habitTracker].contains(template) {
-                VStack(spacing: 5) {
-                    line(width: 62)
-                    miniCard.frame(height: 16)
-                    miniCard.frame(height: 16)
-                    miniCard.frame(height: 16)
-                }
-            } else if [.mediaFeed, .webGallery, .webPortfolio].contains(template) {
-                HStack(spacing: 5) {
-                    miniImage
-                    miniImage
-                }
-                line(width: 68)
-                line(width: 52)
-            } else {
-                line(width: 62)
-                line(width: 72)
-                line(width: 58)
-                line(width: 68)
+            ZStack {
+                PrototypingDraftCanvas(document: document)
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .scaleEffect(scale, anchor: .center)
+                    .frame(width: previewSize.width, height: previewSize.height)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12), lineWidth: 1))
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.12), lineWidth: 1))
     }
 
-    private var miniCard: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .stroke(Color.black.opacity(0.14), lineWidth: 1)
-            .frame(width: 24, height: 18)
-    }
-
-    private var miniImage: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .stroke(Color.black.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-            .frame(width: 36, height: 28)
-    }
-
-    private func line(width: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.black.opacity(0.14))
-            .frame(width: width, height: 5)
+    private var previewDocument: PrototypingDraftDocument {
+        PrototypingDraftDocument(
+            kind: previewContext.kind,
+            template: template,
+            device: previewContext.device,
+            orientation: previewContext.orientation,
+            canvasSize: previewContext.canvasSize
+        )
     }
 }

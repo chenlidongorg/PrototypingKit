@@ -625,7 +625,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         orientation: PrototypingDeviceOrientation = .portrait,
         canvasSize: PrototypingCanvasSize? = nil,
         gridSize: Double = 12,
-        enabledComponents: [PrototypingComponent] = [.title, .search, .card, .listRow, .bottomNavigation, .aiNote],
+        enabledComponents: [PrototypingComponent] = [.title, .search, .card, .listRow, .bottomNavigation],
         elements: [PrototypingCanvasElement]? = nil,
         note: String = PrototypingDraftDocument.defaultAnnotationText,
         activeBoardID: String? = nil,
@@ -908,9 +908,10 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         }
 
         if isWeb {
+            let elements: [PrototypingCanvasElement]
             switch template {
             case .dashboard:
-                return [
+                elements = [
                     element(.sidebar, x: 0, y: 0, width: 150, height: size.height),
                     element(.title, x: 190, y: 44, width: 220, height: 34),
                     element(.card, x: 190, y: 104, width: 210, height: 112),
@@ -921,7 +922,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 28, width: 112, height: 38)
                 ]
             case .landing:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 126, width: 310, height: 42),
                     element(.subtitle, x: 64, y: 186, width: 360, height: 30),
@@ -933,7 +934,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .pricing:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 320, y: 90, width: 320, height: 42),
                     element(.subtitle, x: 286, y: 150, width: 388, height: 30),
@@ -945,7 +946,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webPortfolio:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 108, width: 280, height: 42),
                     element(.subtitle, x: 64, y: 168, width: 320, height: 30),
@@ -958,7 +959,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webBlog:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 104, width: 300, height: 40),
                     element(.subtitle, x: 64, y: 160, width: 420, height: 30),
@@ -970,7 +971,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webDocs:
-                return [
+                elements = [
                     element(.sidebar, x: 0, y: 0, width: 180, height: size.height),
                     element(.topNavigation, x: 216, y: 24, width: 684, height: 52),
                     element(.search, x: 236, y: 108, width: 300, height: 44),
@@ -981,7 +982,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webSaaS:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 112, width: 330, height: 42),
                     element(.subtitle, x: 64, y: 174, width: 360, height: 30),
@@ -994,7 +995,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webAgency:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 110, width: 270, height: 42),
                     element(.subtitle, x: 64, y: 170, width: 340, height: 30),
@@ -1006,7 +1007,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webCourse:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.imagePlaceholder, x: 58, y: 108, width: 384, height: 234),
                     element(.title, x: 494, y: 112, width: 306, height: 42),
@@ -1019,7 +1020,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webEvent:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.tag, x: 64, y: 110, width: 104, height: 30),
                     element(.title, x: 64, y: 156, width: 330, height: 42),
@@ -1032,7 +1033,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webProduct:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.imagePlaceholder, x: 76, y: 110, width: 360, height: 282),
                     element(.title, x: 510, y: 118, width: 300, height: 42),
@@ -1043,7 +1044,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webGallery:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 106, width: 288, height: 42),
                     element(.segmentedControl, x: 596, y: 106, width: 264, height: 42),
@@ -1056,7 +1057,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webContact:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 112, width: 280, height: 42),
                     element(.subtitle, x: 64, y: 172, width: 330, height: 30),
@@ -1067,7 +1068,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             case .webStatus:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.tag, x: 410, y: 110, width: 140, height: 32),
                     element(.title, x: 308, y: 166, width: 344, height: 42),
@@ -1079,7 +1080,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             default:
-                return [
+                elements = [
                     element(.topNavigation, x: 40, y: 24, width: 880, height: 52),
                     element(.title, x: 64, y: 70, width: 300, height: 42),
                     element(.subtitle, x: 64, y: 126, width: 340, height: 28),
@@ -1091,6 +1092,7 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
                     element(.aiNote, x: size.width - 150, y: 88, width: 112, height: 38)
                 ]
             }
+            return elementsWithoutDefaultAnnotations(elements)
         }
 
         let baseElements: [PrototypingCanvasElement]
@@ -1284,8 +1286,15 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
         let sourceSize = template == .tabletDashboard
             ? PrototypingCanvasSize.tablet.cgSize
             : PrototypingCanvasSize.phone.cgSize
-        guard canvasSize.cgSize != sourceSize else { return baseElements }
-        return scaledElements(baseElements, from: sourceSize, to: canvasSize.cgSize)
+        let templateElements = elementsWithoutDefaultAnnotations(baseElements)
+        guard canvasSize.cgSize != sourceSize else { return templateElements }
+        return scaledElements(templateElements, from: sourceSize, to: canvasSize.cgSize)
+    }
+
+    private static func elementsWithoutDefaultAnnotations(
+        _ elements: [PrototypingCanvasElement]
+    ) -> [PrototypingCanvasElement] {
+        elements.filter { $0.component != .aiNote }
     }
 
     private static func scaledElements(
@@ -1583,10 +1592,10 @@ public struct PrototypingDraftDocument: Codable, Identifiable, Hashable {
 
     private static func defaultEnabledComponents(for kind: PrototypingDraftKind) -> [PrototypingComponent] {
         if kind.normalized == .webPage {
-            return [.title, .subtitle, .button, .topNavigation, .card, .chart, .table, .tag, .aiNote]
+            return [.title, .subtitle, .button, .topNavigation, .card, .chart, .table, .tag]
         }
 
-        return [.title, .button, .input, .search, .card, .listRow, .imagePlaceholder, .bottomNavigation, .aiNote]
+        return [.title, .button, .input, .search, .card, .listRow, .imagePlaceholder, .bottomNavigation]
     }
 
     private static func defaultOrientationPreferences(
