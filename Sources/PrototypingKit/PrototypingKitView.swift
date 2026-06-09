@@ -149,37 +149,42 @@ public struct PrototypingKitView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 10) {
+        GeometryReader { proxy in
+            toolbarContent(isCompact: proxy.size.width < 560)
+        }
+        .frame(height: 58)
+    }
+
+    private func toolbarContent(isCompact: Bool) -> some View {
+        HStack(spacing: isCompact ? 8 : 10) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(PrototypingKitColors.secondaryInk)
+                    .frame(width: 32, height: 34)
             }
             .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(PrototypingL10n.text("action.cancel"))
 
-            TextField(PrototypingL10n.text("field.title"), text: titleBinding)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(PrototypingKitColors.ink)
-                .textFieldStyle(PlainTextFieldStyle())
+            toolbarTitleField(isCompact: isCompact)
 
-            HStack(spacing: 22) {
+            HStack(spacing: isCompact ? 12 : 22) {
                 Button(action: createDraft) {
-                    Label(PrototypingL10n.text("toolbar.new"), systemImage: "plus")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(PrototypingKitColors.ink)
+                    toolbarSystemActionLabel(
+                        title: PrototypingL10n.text("toolbar.new"),
+                        systemImage: "plus",
+                        isCompact: isCompact
+                    )
                 }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel(PrototypingL10n.text("toolbar.new"))
 
-                HStack(spacing: 12) {
+                HStack(spacing: isCompact ? 12 : 12) {
                     Button(action: insertIntoHost) {
-                        HStack(spacing: 6) {
-                            InsertCanvasIcon()
-                                .frame(width: 18, height: 18)
-                            Text(PrototypingL10n.text("toolbar.insert_canvas"))
-                        }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(PrototypingKitColors.ink)
+                        toolbarInsertCanvasLabel(isCompact: isCompact)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(PrototypingL10n.text("toolbar.insert_canvas"))
 
                     Menu {
                         Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
@@ -189,15 +194,65 @@ public struct PrototypingKitView: View {
                             Label(PrototypingL10n.text("export.share_pdf"), systemImage: "square.and.arrow.up")
                         }
                     } label: {
-                        Label(PrototypingL10n.text("toolbar.export"), systemImage: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(PrototypingKitColors.ink)
+                        toolbarSystemActionLabel(
+                            title: PrototypingL10n.text("toolbar.export"),
+                            systemImage: "square.and.arrow.up",
+                            isCompact: isCompact
+                        )
                     }
+                    .accessibilityLabel(PrototypingL10n.text("toolbar.export"))
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, isCompact ? 10 : 18)
+        .padding(.vertical, 10)
+    }
+
+    private func toolbarTitleField(isCompact: Bool) -> some View {
+        let titleWidth = max(
+            isCompact ? 150 : 220,
+            CGFloat(store.currentDocument.title.count) * (isCompact ? 16 : 18) + 30
+        )
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            TextField(PrototypingL10n.text("field.title"), text: titleBinding)
+                .font(.system(size: isCompact ? 19 : 20, weight: .semibold))
+                .foregroundColor(PrototypingKitColors.ink)
+                .textFieldStyle(PlainTextFieldStyle())
+                .frame(width: titleWidth, alignment: .leading)
+        }
+        .frame(height: 34)
+        .clipped()
+        .layoutPriority(1)
+    }
+
+    private func toolbarSystemActionLabel(title: String, systemImage: String, isCompact: Bool) -> some View {
+        Group {
+            if isCompact {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .frame(width: 34, height: 34)
+            } else {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+        }
+        .foregroundColor(PrototypingKitColors.ink)
+    }
+
+    private func toolbarInsertCanvasLabel(isCompact: Bool) -> some View {
+        HStack(spacing: 6) {
+            InsertCanvasIcon()
+                .frame(width: isCompact ? 24 : 18, height: isCompact ? 24 : 18)
+            if !isCompact {
+                Text(PrototypingL10n.text("toolbar.insert_canvas"))
+            }
+        }
+        .frame(width: isCompact ? 34 : nil, height: 34)
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundColor(PrototypingKitColors.ink)
     }
 
     private var content: some View {
@@ -468,15 +523,10 @@ public struct PrototypingKitView: View {
 
     private var sidebarLauncher: some View {
         Button(action: { isSidebarExpanded = true }) {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("\(store.records.count)")
-                    .font(.system(size: 11, weight: .semibold))
-            }
+            Image(systemName: "list.bullet.circle")
+                .font(.system(size: 19, weight: .semibold))
+                .frame(width: 34, height: 34)
             .foregroundColor(PrototypingKitColors.accent)
-            .padding(.horizontal, 10)
-            .frame(height: 38)
             .background(PrototypingKitColors.panel.opacity(0.96))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -486,19 +536,15 @@ public struct PrototypingKitView: View {
             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(PrototypingL10n.text("sidebar.recent_drafts"))
     }
 
     private var inspectorLauncher: some View {
         Button(action: { inspectorExpandedOverride = true }) {
-            HStack(spacing: 6) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 15, weight: .semibold))
-                Text(PrototypingL10n.text("launcher.tools"))
-                    .font(.system(size: 12, weight: .semibold))
-            }
+            Image(systemName: "ipad.landscape.and.iphone")
+                .font(.system(size: 18, weight: .semibold))
+                .frame(width: 42, height: 34)
             .foregroundColor(PrototypingKitColors.accent)
-            .padding(.horizontal, 10)
-            .frame(height: 38)
             .background(PrototypingKitColors.panel.opacity(0.96))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -508,6 +554,7 @@ public struct PrototypingKitView: View {
             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(PrototypingL10n.text("launcher.tools"))
     }
 
     private var inspector: some View {
