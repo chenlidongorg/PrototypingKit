@@ -3,8 +3,18 @@ import UIKit
 
 @MainActor
 public enum PrototypingRenderer {
-    public static func renderImage(document: PrototypingDraftDocument) -> UIImage {
-        render(
+    public static func renderImage(document: PrototypingDraftDocument, hostCanvasSize: CGSize? = nil) -> UIImage {
+        if let hostCanvasSize = normalizedHostCanvasSize(hostCanvasSize) {
+            return render(
+                view: PrototypingHostCanvasExportCanvas(
+                    document: document,
+                    hostCanvasSize: hostCanvasSize
+                ),
+                size: hostCanvasSize
+            )
+        }
+
+        return render(
             view: PrototypingExportCanvas(document: document),
             size: PrototypingExportCanvas.outputSize(for: document)
         )
@@ -34,6 +44,22 @@ public enum PrototypingRenderer {
             }
         }
         return destinationURL
+    }
+
+    private static func normalizedHostCanvasSize(_ size: CGSize?) -> CGSize? {
+        guard let size,
+              size.width.isFinite,
+              size.height.isFinite,
+              size.width > 1,
+              size.height > 1
+        else {
+            return nil
+        }
+
+        return CGSize(
+            width: size.width.rounded(.toNearestOrAwayFromZero),
+            height: size.height.rounded(.toNearestOrAwayFromZero)
+        )
     }
 
     private static func render<Content: View>(view: Content, size: CGSize) -> UIImage {

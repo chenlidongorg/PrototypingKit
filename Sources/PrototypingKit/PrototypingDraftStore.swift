@@ -347,9 +347,15 @@ public final class PrototypingDraftStore: ObservableObject {
         }
     }
 
-    public func exportImage(recommendedIntent: PrototypingImportIntent = .setAsBackground) -> PrototypingExportResult {
+    public func exportImage(
+        recommendedIntent: PrototypingImportIntent = .setAsBackground,
+        hostCanvasSize: CGSize? = nil
+    ) -> PrototypingExportResult {
         saveCurrentDocument()
-        let image = PrototypingRenderer.renderImage(document: currentDocument)
+        let image = PrototypingRenderer.renderImage(
+            document: currentDocument,
+            hostCanvasSize: hostCanvasSize
+        )
         let metadata = metadata(recommendedIntent: recommendedIntent)
         return .image(image, metadata: metadata)
     }
