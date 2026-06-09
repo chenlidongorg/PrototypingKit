@@ -2,11 +2,22 @@ import SwiftUI
 import UIKit
 
 struct PrototypingExportCanvas: View {
+    static let padding: CGFloat = 18
+
     let document: PrototypingDraftDocument
+
+    static func outputSize(for document: PrototypingDraftDocument) -> CGSize {
+        let canvasSize = document.canvasSize.cgSize
+        return CGSize(
+            width: canvasSize.width + padding * 2,
+            height: canvasSize.height + padding * 2
+        )
+    }
 
     var body: some View {
         PrototypingDraftCanvas(document: document, showsGrid: false)
-            .padding(18)
+            .frame(width: document.canvasSize.width, height: document.canvasSize.height)
+            .padding(Self.padding)
             .background(Color.white)
     }
 }

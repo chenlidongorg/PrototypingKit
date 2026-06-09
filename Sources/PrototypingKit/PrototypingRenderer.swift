@@ -4,7 +4,10 @@ import UIKit
 @MainActor
 public enum PrototypingRenderer {
     public static func renderImage(document: PrototypingDraftDocument) -> UIImage {
-        render(view: PrototypingExportCanvas(document: document), size: document.canvasSize.cgSize)
+        render(
+            view: PrototypingExportCanvas(document: document),
+            size: PrototypingExportCanvas.outputSize(for: document)
+        )
     }
 
     public static func renderThumbnail(document: PrototypingDraftDocument) -> UIImage {
@@ -17,11 +20,14 @@ public enum PrototypingRenderer {
 
     public static func renderPDF(documents: [PrototypingDraftDocument], destinationURL: URL) throws -> URL {
         let exportDocuments = documents.isEmpty ? [PrototypingDraftDocument()] : documents
-        let defaultSize = exportDocuments.first?.canvasSize.cgSize ?? PrototypingCanvasSize.phone.cgSize
+        let defaultSize = exportDocuments
+            .first
+            .map(PrototypingExportCanvas.outputSize(for:))
+            ?? PrototypingExportCanvas.outputSize(for: PrototypingDraftDocument())
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: defaultSize))
         try renderer.writePDF(to: destinationURL) { context in
             for document in exportDocuments {
-                let size = document.canvasSize.cgSize
+                let size = PrototypingExportCanvas.outputSize(for: document)
                 let image = renderImage(document: document)
                 context.beginPage(withBounds: CGRect(origin: .zero, size: size), pageInfo: [:])
                 image.draw(in: CGRect(origin: .zero, size: size))
