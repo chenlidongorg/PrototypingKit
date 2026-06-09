@@ -276,7 +276,9 @@ public struct PrototypingKitView: View {
             let isWide = proxy.size.width >= 900
             let inspectorIsExpanded = inspectorExpandedOverride ?? isWide
             let inspectorWidth = min(max(proxy.size.width * 0.28, 250), 340)
-            let stageWidth = inspectorIsExpanded && isWide ? proxy.size.width - inspectorWidth - 1 : proxy.size.width
+            let stageWidth = inspectorIsExpanded
+                ? proxy.size.width - inspectorWidth - (isWide ? 1 : 0)
+                : proxy.size.width
             let stageSize = CGSize(width: max(1, stageWidth), height: max(1, proxy.size.height))
 
             ZStack(alignment: .topLeading) {
@@ -1272,11 +1274,8 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         scrollView.canCancelContentTouches = true
         scrollView.onBoundsChanged = { [weak scrollView, weak coordinator = context.coordinator] in
             guard let scrollView, let coordinator else { return }
-            coordinator.updateInsets(for: scrollView, margin: coordinator.currentMargin)
-            if coordinator.shouldRecenterOnNextLayout {
-                coordinator.centerContent(in: scrollView)
-                coordinator.shouldRecenterOnNextLayout = false
-            }
+            coordinator.centerContent(in: scrollView)
+            coordinator.shouldRecenterOnNextLayout = false
         }
 
         let containerView = UIView(frame: CGRect(origin: .zero, size: canvasSize))
