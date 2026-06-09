@@ -448,10 +448,6 @@ public struct PrototypingKitView: View {
         ].joined(separator: "-")
     }
 
-    private func stageScaleKey(_ scale: CGFloat) -> Int {
-        Int((scale * 100).rounded())
-    }
-
     private var stageMargin: CGFloat {
         44
     }
@@ -1232,18 +1228,27 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         Coordinator(onZoomEnded: onZoomEnded)
     }
 
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView(frame: .zero)
+    func makeUIView(context: Context) -> PrototypingStageScrollView {
+        let scrollView = PrototypingStageScrollView(frame: .zero)
         scrollView.delegate = context.coordinator
         scrollView.backgroundColor = .clear
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.showsVerticalScrollIndicator = true
         scrollView.showsHorizontalScrollIndicator = true
-        scrollView.alwaysBounceHorizontal = true
-        scrollView.alwaysBounceVertical = true
+        scrollView.bounces = false
+        scrollView.alwaysBounceHorizontal = false
+        scrollView.alwaysBounceVertical = false
         scrollView.bouncesZoom = true
         scrollView.delaysContentTouches = false
         scrollView.canCancelContentTouches = true
+        scrollView.onBoundsChanged = { [weak scrollView, weak coordinator = context.coordinator] in
+            guard let scrollView, let coordinator else { return }
+            coordinator.updateInsets(for: scrollView, margin: coordinator.currentMargin)
+            if coordinator.shouldRecenterOnNextLayout {
+                coordinator.centerContent(in: scrollView)
+                coordinator.shouldRecenterOnNextLayout = false
+            }
+        }
 
         let containerView = UIView(frame: CGRect(origin: .zero, size: canvasSize))
         containerView.backgroundColor = .clear
@@ -1263,7 +1268,7 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         return scrollView
     }
 
-    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+    func updateUIView(_ scrollView: PrototypingStageScrollView, context: Context) {
         context.coordinator.onZoomEnded = onZoomEnded
         context.coordinator.hostingController?.rootView = content
 
@@ -1293,7 +1298,11 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
 
         context.coordinator.updateInsets(for: scrollView, margin: contentMargin)
         if shouldRecenter {
-            context.coordinator.centerContent(in: scrollView)
+            if scrollView.bounds.width > 0, scrollView.bounds.height > 0 {
+                context.coordinator.centerContent(in: scrollView)
+            } else {
+                context.coordinator.shouldRecenterOnNextLayout = true
+            }
         }
     }
 
@@ -1304,6 +1313,8 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         var lastCanvasSize: CGSize = .zero
         var lastRecenterID = ""
         var isApplyingProgrammaticZoom = false
+        var shouldRecenterOnNextLayout = false
+        var currentMargin: CGFloat = 44
 
         init(onZoomEnded: @escaping (CGFloat) -> Void) {
             self.onZoomEnded = onZoomEnded
@@ -1327,8 +1338,6 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             onZoomEnded(scale)
         }
 
-        private var currentMargin: CGFloat = 44
-
         func updateInsets(for scrollView: UIScrollView, margin: CGFloat) {
             currentMargin = margin
             let horizontal = max(margin, (scrollView.bounds.width - scrollView.contentSize.width) / 2)
@@ -1342,6 +1351,11 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         }
 
         func centerContent(in scrollView: UIScrollView) {
+            guard scrollView.bounds.width > 0, scrollView.bounds.height > 0 else {
+                shouldRecenterOnNextLayout = true
+                return
+            }
+
             scrollView.layoutIfNeeded()
             updateInsets(for: scrollView, margin: currentMargin)
             let offsetX = max(
@@ -1354,6 +1368,19 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             )
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
         }
+    }
+}
+
+private final class PrototypingStageScrollView: UIScrollView {
+    var onBoundsChanged: (() -> Void)?
+    private var lastBoundsSize: CGSize = .zero
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        guard bounds.size != lastBoundsSize else { return }
+        lastBoundsSize = bounds.size
+        onBoundsChanged?()
     }
 }
 
