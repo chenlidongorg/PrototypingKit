@@ -1365,8 +1365,9 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         }
 
         func updateContentInset(for scrollView: UIScrollView) {
-            let insetX = max(0, (scrollView.bounds.width - scrollView.contentSize.width) / 2)
-            let insetY = max(0, (scrollView.bounds.height - scrollView.contentSize.height) / 2)
+            let panInset = panActivityInset(for: scrollView)
+            let insetX = max(0, (scrollView.bounds.width - scrollView.contentSize.width) / 2) + panInset
+            let insetY = max(0, (scrollView.bounds.height - scrollView.contentSize.height) / 2) + panInset
             scrollView.contentInset = UIEdgeInsets(top: insetY, left: insetX, bottom: insetY, right: insetX)
         }
 
@@ -1381,26 +1382,35 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             let offsetX = centeredOffset(
                 viewportLength: scrollView.bounds.width,
                 contentLength: scrollView.contentSize.width,
-                leadingInset: scrollView.contentInset.left
+                leadingInset: scrollView.contentInset.left,
+                trailingInset: scrollView.contentInset.right
             )
             let offsetY = centeredOffset(
                 viewportLength: scrollView.bounds.height,
                 contentLength: scrollView.contentSize.height,
-                leadingInset: scrollView.contentInset.top
+                leadingInset: scrollView.contentInset.top,
+                trailingInset: scrollView.contentInset.bottom
             )
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
+        }
+
+        private func panActivityInset(for scrollView: UIScrollView) -> CGFloat {
+            let viewportLength = min(scrollView.bounds.width, scrollView.bounds.height)
+            guard viewportLength > 0 else { return 48 }
+
+            return min(max(viewportLength * 0.18, 48), 160)
         }
 
         private func centeredOffset(
             viewportLength: CGFloat,
             contentLength: CGFloat,
-            leadingInset: CGFloat
+            leadingInset: CGFloat,
+            trailingInset: CGFloat
         ) -> CGFloat {
-            guard contentLength > viewportLength else {
-                return -leadingInset
-            }
-
-            return (contentLength - viewportLength) / 2
+            let centeredOffset = (contentLength - viewportLength) / 2
+            let minimumOffset = -leadingInset
+            let maximumOffset = contentLength - viewportLength + trailingInset
+            return min(max(centeredOffset, minimumOffset), maximumOffset)
         }
     }
 }
