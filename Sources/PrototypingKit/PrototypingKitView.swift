@@ -1369,8 +1369,9 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         func updateInsets(for scrollView: UIScrollView, margin: CGFloat) {
             currentMargin = margin
             let contentSize = zoomedContentSize(for: scrollView)
-            let horizontal = max(margin, (scrollView.bounds.width - contentSize.width) / 2)
-            let vertical = max(margin, (scrollView.bounds.height - contentSize.height) / 2)
+            let panMargin = interactiveMargin(for: scrollView, baseMargin: margin)
+            let horizontal = max(0, (scrollView.bounds.width - contentSize.width) / 2) + panMargin
+            let vertical = max(0, (scrollView.bounds.height - contentSize.height) / 2) + panMargin
             scrollView.contentInset = UIEdgeInsets(
                 top: vertical,
                 left: horizontal,
@@ -1412,6 +1413,12 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             }
 
             return containerView?.frame.size ?? .zero
+        }
+
+        private func interactiveMargin(for scrollView: UIScrollView, baseMargin: CGFloat) -> CGFloat {
+            let viewportLength = max(scrollView.bounds.width, scrollView.bounds.height)
+            let adaptiveMargin = min(max(viewportLength * 0.16, baseMargin), 160)
+            return max(baseMargin, adaptiveMargin)
         }
 
         private func centeredOffset(
