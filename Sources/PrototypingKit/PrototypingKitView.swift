@@ -327,7 +327,7 @@ public struct PrototypingKitView: View {
                         .shadow(color: Color.black.opacity(0.16), radius: 18, x: -10, y: 0)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .transition(.move(edge: .trailing))
-                } else if !inspectorIsExpanded {
+                } else if !inspectorIsExpanded && !isSidebarExpanded {
                     inspectorLauncher
                         .padding(.trailing, 14)
                         .padding(.top, 14)
