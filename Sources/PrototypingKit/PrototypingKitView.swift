@@ -1350,6 +1350,8 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         var shouldRecenterOnNextLayout = false
         var currentMargin: CGFloat = 44
         var lastWorkspaceSize: CGSize = .zero
+        var zoomAnchorCanvasPoint: CGPoint?
+        var zoomAnchorViewportPoint: CGPoint?
 
         init(onZoomEnded: @escaping (CGFloat) -> Void) {
             self.onZoomEnded = onZoomEnded
@@ -1361,16 +1363,32 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
 
         func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
             isApplyingProgrammaticZoom = false
+            zoomAnchorCanvasPoint = pinchCanvasPoint(in: scrollView)
+            zoomAnchorViewportPoint = scrollView.pinchGestureRecognizer?.location(in: scrollView)
         }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            syncContentSize(for: scrollView)
+            updateWorkspace(for: scrollView, margin: currentMargin)
+            if let zoomAnchorCanvasPoint, let zoomAnchorViewportPoint {
+                restoreViewportPoint(
+                    zoomAnchorViewportPoint,
+                    toCanvasPoint: zoomAnchorCanvasPoint,
+                    in: scrollView
+                )
+            }
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
-            let visibleCanvasPoint = canvasPointAtViewportCenter(in: scrollView)
             updateWorkspace(for: scrollView, margin: currentMargin, zoomScale: scale)
-            restoreViewportCenter(toCanvasPoint: visibleCanvasPoint, in: scrollView)
+            if let zoomAnchorCanvasPoint, let zoomAnchorViewportPoint {
+                restoreViewportPoint(
+                    zoomAnchorViewportPoint,
+                    toCanvasPoint: zoomAnchorCanvasPoint,
+                    in: scrollView
+                )
+            }
+            zoomAnchorCanvasPoint = nil
+            zoomAnchorViewportPoint = nil
             guard !isApplyingProgrammaticZoom else { return }
             onZoomEnded(scale)
         }
@@ -1438,15 +1456,6 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
         }
 
-        private func syncContentSize(for scrollView: UIScrollView) {
-            guard let workspaceView else { return }
-            scrollView.contentInset = .zero
-            scrollView.contentSize = CGSize(
-                width: workspaceView.bounds.width * scrollView.zoomScale,
-                height: workspaceView.bounds.height * scrollView.zoomScale
-            )
-        }
-
         private func interactiveMargin(for scrollView: UIScrollView, baseMargin: CGFloat) -> CGFloat {
             let viewportLength = max(scrollView.bounds.width, scrollView.bounds.height)
             let adaptiveMargin = min(max(viewportLength * 0.16, baseMargin), 160)
@@ -1461,27 +1470,26 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             return CGPoint(x: containerView.frame.midX, y: containerView.frame.midY)
         }
 
-        private func canvasPointAtViewportCenter(in scrollView: UIScrollView) -> CGPoint {
-            let scale = max(scrollView.zoomScale, 0.001)
-            let workspacePoint = CGPoint(
-                x: (scrollView.contentOffset.x + scrollView.bounds.width / 2) / scale,
-                y: (scrollView.contentOffset.y + scrollView.bounds.height / 2) / scale
-            )
-            let canvasOrigin = containerView?.frame.origin ?? .zero
-            return CGPoint(x: workspacePoint.x - canvasOrigin.x, y: workspacePoint.y - canvasOrigin.y)
+        private func pinchCanvasPoint(in scrollView: UIScrollView) -> CGPoint {
+            guard let containerView else { return .zero }
+            return scrollView.pinchGestureRecognizer?.location(in: containerView) ?? .zero
         }
 
-        private func restoreViewportCenter(toCanvasPoint canvasPoint: CGPoint, in scrollView: UIScrollView) {
+        private func restoreViewportPoint(
+            _ viewportPoint: CGPoint,
+            toCanvasPoint canvasPoint: CGPoint,
+            in scrollView: UIScrollView
+        ) {
             let scale = max(scrollView.zoomScale, 0.001)
             let canvasOrigin = containerView?.frame.origin ?? .zero
             let workspacePoint = CGPoint(x: canvasOrigin.x + canvasPoint.x, y: canvasOrigin.y + canvasPoint.y)
             let offsetX = clampedOffset(
-                workspacePoint.x * scale - scrollView.bounds.width / 2,
+                workspacePoint.x * scale - viewportPoint.x,
                 viewportLength: scrollView.bounds.width,
                 contentLength: scrollView.contentSize.width
             )
             let offsetY = clampedOffset(
-                workspacePoint.y * scale - scrollView.bounds.height / 2,
+                workspacePoint.y * scale - viewportPoint.y,
                 viewportLength: scrollView.bounds.height,
                 contentLength: scrollView.contentSize.height
             )
