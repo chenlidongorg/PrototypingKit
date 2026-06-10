@@ -3,6 +3,7 @@
 "action.apply" = "Apply";
 "action.cancel" = "Cancel";
 "action.done" = "Done";
+"action.delete" = "Delete";
 "action.edit" = "Edit";
 "action.multi_select" = "Multi";
 "action.ok" = "OK";

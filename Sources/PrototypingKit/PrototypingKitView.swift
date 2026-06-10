@@ -275,9 +275,10 @@ public struct PrototypingKitView: View {
         GeometryReader { proxy in
             let isWide = proxy.size.width >= 900
             let inspectorIsExpanded = inspectorExpandedOverride ?? isWide
-            let inspectorWidth = min(max(proxy.size.width * 0.28, 250), 340)
-            let stageWidth = inspectorIsExpanded
-                ? proxy.size.width - inspectorWidth - (isWide ? 1 : 0)
+            let inspectorWidth = inspectorPanelWidth(for: proxy.size.width)
+            let sidebarWidth = sidebarPanelWidth(for: proxy.size.width)
+            let stageWidth = inspectorIsExpanded && isWide
+                ? proxy.size.width - inspectorWidth - 1
                 : proxy.size.width
             let stageSize = CGSize(width: max(1, stageWidth), height: max(1, proxy.size.height))
 
@@ -301,7 +302,7 @@ public struct PrototypingKitView: View {
                         }
 
                     sidebar
-                        .frame(width: min(max(proxy.size.width * 0.24, 230), 300))
+                        .frame(width: sidebarWidth)
                         .frame(maxHeight: .infinity)
                         .background(PrototypingKitColors.panel)
                         .shadow(color: Color.black.opacity(0.16), radius: 18, x: 10, y: 0)
@@ -474,6 +475,23 @@ public struct PrototypingKitView: View {
         min(maximumStageZoom, max(minimumStageZoom, scale))
     }
 
+    private func sidebarPanelWidth(for availableWidth: CGFloat) -> CGFloat {
+        guard UIDevice.current.userInterfaceIdiom != .phone else {
+            return max(1, availableWidth * 0.9)
+        }
+
+        let baseWidth = min(max(availableWidth * 0.24, 230), 300)
+        return min(max(1, availableWidth * 0.9), baseWidth * 1.5)
+    }
+
+    private func inspectorPanelWidth(for availableWidth: CGFloat) -> CGFloat {
+        guard UIDevice.current.userInterfaceIdiom != .phone else {
+            return max(1, availableWidth * 0.9)
+        }
+
+        return min(max(availableWidth * 0.28, 250), 340)
+    }
+
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -498,6 +516,9 @@ public struct PrototypingKitView: View {
                             },
                             onRename: { title in
                                 store.renameDraft(id: record.id, title: title)
+                            },
+                            onDelete: {
+                                deleteDraft(id: record.id)
                             }
                         )
                     }
@@ -916,6 +937,11 @@ public struct PrototypingKitView: View {
         isSidebarExpanded = false
     }
 
+    private func deleteDraft(id: String) {
+        selectedElementIDs = []
+        store.deleteDraft(id: id)
+    }
+
     private func applyTemplateFromUI(_ template: PrototypingTemplate, isWide: Bool) {
         selectedElementIDs = []
         if store.currentDocument.elements.isEmpty {
@@ -1132,6 +1158,7 @@ private struct DraftRecordRow: View {
     let isSelected: Bool
     let onOpen: () -> Void
     let onRename: (String) -> Void
+    let onDelete: () -> Void
 
     @State private var isEditingTitle = false
     @State private var editingTitle = ""
@@ -1178,6 +1205,17 @@ private struct DraftRecordRow: View {
             }
 
             Spacer()
+
+            if !isEditingTitle {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color.red.opacity(0.72))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel(PrototypingL10n.text("action.delete"))
+            }
         }
         .padding(8)
         .background(isSelected ? PrototypingKitColors.accent.opacity(0.08) : Color.clear)
