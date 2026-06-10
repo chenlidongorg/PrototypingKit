@@ -1274,13 +1274,18 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         scrollView.canCancelContentTouches = true
         scrollView.onBoundsChanged = { [weak scrollView, weak coordinator = context.coordinator] in
             guard let scrollView, let coordinator else { return }
+            coordinator.updateWorkspace(for: scrollView, margin: coordinator.currentMargin)
             coordinator.centerContent(in: scrollView)
             coordinator.shouldRecenterOnNextLayout = false
         }
 
+        let workspaceView = UIView(frame: CGRect(origin: .zero, size: canvasSize))
+        workspaceView.backgroundColor = .clear
+        scrollView.addSubview(workspaceView)
+
         let containerView = UIView(frame: CGRect(origin: .zero, size: canvasSize))
         containerView.backgroundColor = .clear
-        scrollView.addSubview(containerView)
+        workspaceView.addSubview(containerView)
 
         let hostingController = UIHostingController(rootView: content)
         hostingController.view.backgroundColor = .clear
@@ -1288,6 +1293,7 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         containerView.addSubview(hostingController.view)
 
+        context.coordinator.workspaceView = workspaceView
         context.coordinator.containerView = containerView
         context.coordinator.hostingController = hostingController
         context.coordinator.lastCanvasSize = canvasSize
@@ -1305,7 +1311,6 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             context.coordinator.lastCanvasSize = canvasSize
             context.coordinator.containerView?.frame = CGRect(origin: .zero, size: canvasSize)
             context.coordinator.hostingController?.view.frame = CGRect(origin: .zero, size: canvasSize)
-            scrollView.contentSize = canvasSize
         }
 
         let shouldRecenter = canvasChanged || context.coordinator.lastRecenterID != recenterID
@@ -1324,7 +1329,7 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             context.coordinator.isApplyingProgrammaticZoom = false
         }
 
-        context.coordinator.updateInsets(for: scrollView, margin: contentMargin)
+        context.coordinator.updateWorkspace(for: scrollView, margin: contentMargin, zoomScale: clampedScale)
         if shouldRecenter {
             if scrollView.bounds.width > 0, scrollView.bounds.height > 0 {
                 context.coordinator.centerContent(in: scrollView)
@@ -1336,6 +1341,7 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
 
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var onZoomEnded: (CGFloat) -> Void
+        weak var workspaceView: UIView?
         weak var containerView: UIView?
         var hostingController: UIHostingController<Content>?
         var lastCanvasSize: CGSize = .zero
@@ -1343,13 +1349,14 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         var isApplyingProgrammaticZoom = false
         var shouldRecenterOnNextLayout = false
         var currentMargin: CGFloat = 44
+        var lastWorkspaceSize: CGSize = .zero
 
         init(onZoomEnded: @escaping (CGFloat) -> Void) {
             self.onZoomEnded = onZoomEnded
         }
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-            containerView
+            workspaceView
         }
 
         func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
@@ -1357,27 +1364,55 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            updateInsets(for: scrollView, margin: currentMargin)
+            syncContentSize(for: scrollView)
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
-            updateInsets(for: scrollView, margin: currentMargin)
+            let visibleCanvasPoint = canvasPointAtViewportCenter(in: scrollView)
+            updateWorkspace(for: scrollView, margin: currentMargin, zoomScale: scale)
+            restoreViewportCenter(toCanvasPoint: visibleCanvasPoint, in: scrollView)
             guard !isApplyingProgrammaticZoom else { return }
             onZoomEnded(scale)
         }
 
-        func updateInsets(for scrollView: UIScrollView, margin: CGFloat) {
+        func updateWorkspace(for scrollView: UIScrollView, margin: CGFloat, zoomScale: CGFloat? = nil) {
             currentMargin = margin
-            let contentSize = zoomedContentSize(for: scrollView)
-            let panMargin = interactiveMargin(for: scrollView, baseMargin: margin)
-            let horizontal = max(0, (scrollView.bounds.width - contentSize.width) / 2) + panMargin
-            let vertical = max(0, (scrollView.bounds.height - contentSize.height) / 2) + panMargin
-            scrollView.contentInset = UIEdgeInsets(
-                top: vertical,
-                left: horizontal,
-                bottom: vertical,
-                right: horizontal
+            guard
+                let workspaceView,
+                let containerView,
+                lastCanvasSize.width > 0,
+                lastCanvasSize.height > 0
+            else { return }
+
+            let scale = max(zoomScale ?? scrollView.zoomScale, 0.001)
+            let panMargin = interactiveMargin(for: scrollView, baseMargin: margin) / scale
+            let visibleWidth = max(0, scrollView.bounds.width / scale)
+            let visibleHeight = max(0, scrollView.bounds.height / scale)
+            let horizontalPadding = max(0, (visibleWidth - lastCanvasSize.width) / 2) + panMargin
+            let verticalPadding = max(0, (visibleHeight - lastCanvasSize.height) / 2) + panMargin
+            let workspaceSize = CGSize(
+                width: lastCanvasSize.width + horizontalPadding * 2,
+                height: lastCanvasSize.height + verticalPadding * 2
             )
+
+            workspaceView.bounds = CGRect(origin: .zero, size: workspaceSize)
+            workspaceView.center = CGPoint(
+                x: workspaceSize.width * scale / 2,
+                y: workspaceSize.height * scale / 2
+            )
+            containerView.frame = CGRect(
+                x: horizontalPadding,
+                y: verticalPadding,
+                width: lastCanvasSize.width,
+                height: lastCanvasSize.height
+            )
+            hostingController?.view.frame = containerView.bounds
+            scrollView.contentInset = .zero
+            scrollView.contentSize = CGSize(
+                width: workspaceSize.width * scale,
+                height: workspaceSize.height * scale
+            )
+            lastWorkspaceSize = workspaceSize
         }
 
         func centerContent(in scrollView: UIScrollView) {
@@ -1387,32 +1422,29 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             }
 
             scrollView.layoutIfNeeded()
-            updateInsets(for: scrollView, margin: currentMargin)
-            let contentSize = zoomedContentSize(for: scrollView)
-            let offsetX = centeredOffset(
-                contentLength: contentSize.width,
+            updateWorkspace(for: scrollView, margin: currentMargin)
+            let scale = max(scrollView.zoomScale, 0.001)
+            let canvasCenter = canvasCenterInWorkspace()
+            let offsetX = clampedOffset(
+                canvasCenter.x * scale - scrollView.bounds.width / 2,
                 viewportLength: scrollView.bounds.width,
-                leadingInset: scrollView.contentInset.left,
-                trailingInset: scrollView.contentInset.right
+                contentLength: scrollView.contentSize.width
             )
-            let offsetY = centeredOffset(
-                contentLength: contentSize.height,
+            let offsetY = clampedOffset(
+                canvasCenter.y * scale - scrollView.bounds.height / 2,
                 viewportLength: scrollView.bounds.height,
-                leadingInset: scrollView.contentInset.top,
-                trailingInset: scrollView.contentInset.bottom
+                contentLength: scrollView.contentSize.height
             )
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
         }
 
-        private func zoomedContentSize(for scrollView: UIScrollView) -> CGSize {
-            if lastCanvasSize.width > 0, lastCanvasSize.height > 0 {
-                return CGSize(
-                    width: lastCanvasSize.width * scrollView.zoomScale,
-                    height: lastCanvasSize.height * scrollView.zoomScale
-                )
-            }
-
-            return containerView?.frame.size ?? .zero
+        private func syncContentSize(for scrollView: UIScrollView) {
+            guard let workspaceView else { return }
+            scrollView.contentInset = .zero
+            scrollView.contentSize = CGSize(
+                width: workspaceView.bounds.width * scrollView.zoomScale,
+                height: workspaceView.bounds.height * scrollView.zoomScale
+            )
         }
 
         private func interactiveMargin(for scrollView: UIScrollView, baseMargin: CGFloat) -> CGFloat {
@@ -1421,16 +1453,44 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             return max(baseMargin, adaptiveMargin)
         }
 
-        private func centeredOffset(
-            contentLength: CGFloat,
-            viewportLength: CGFloat,
-            leadingInset: CGFloat,
-            trailingInset: CGFloat
-        ) -> CGFloat {
-            let minimumOffset = -leadingInset
-            let maximumOffset = max(minimumOffset, contentLength - viewportLength + trailingInset)
-            let centeredOffset = (contentLength - viewportLength) / 2
-            return min(max(centeredOffset, minimumOffset), maximumOffset)
+        private func canvasCenterInWorkspace() -> CGPoint {
+            guard let containerView else {
+                return CGPoint(x: lastWorkspaceSize.width / 2, y: lastWorkspaceSize.height / 2)
+            }
+
+            return CGPoint(x: containerView.frame.midX, y: containerView.frame.midY)
+        }
+
+        private func canvasPointAtViewportCenter(in scrollView: UIScrollView) -> CGPoint {
+            let scale = max(scrollView.zoomScale, 0.001)
+            let workspacePoint = CGPoint(
+                x: (scrollView.contentOffset.x + scrollView.bounds.width / 2) / scale,
+                y: (scrollView.contentOffset.y + scrollView.bounds.height / 2) / scale
+            )
+            let canvasOrigin = containerView?.frame.origin ?? .zero
+            return CGPoint(x: workspacePoint.x - canvasOrigin.x, y: workspacePoint.y - canvasOrigin.y)
+        }
+
+        private func restoreViewportCenter(toCanvasPoint canvasPoint: CGPoint, in scrollView: UIScrollView) {
+            let scale = max(scrollView.zoomScale, 0.001)
+            let canvasOrigin = containerView?.frame.origin ?? .zero
+            let workspacePoint = CGPoint(x: canvasOrigin.x + canvasPoint.x, y: canvasOrigin.y + canvasPoint.y)
+            let offsetX = clampedOffset(
+                workspacePoint.x * scale - scrollView.bounds.width / 2,
+                viewportLength: scrollView.bounds.width,
+                contentLength: scrollView.contentSize.width
+            )
+            let offsetY = clampedOffset(
+                workspacePoint.y * scale - scrollView.bounds.height / 2,
+                viewportLength: scrollView.bounds.height,
+                contentLength: scrollView.contentSize.height
+            )
+            scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
+        }
+
+        private func clampedOffset(_ offset: CGFloat, viewportLength: CGFloat, contentLength: CGFloat) -> CGFloat {
+            let maximumOffset = max(0, contentLength - viewportLength)
+            return min(max(offset, 0), maximumOffset)
         }
     }
 }
