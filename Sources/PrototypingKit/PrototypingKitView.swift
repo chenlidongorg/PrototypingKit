@@ -1355,7 +1355,7 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
         }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            updateContentInset(for: scrollView)
+            updateContentInset(for: scrollView, syncContentSize: false)
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
@@ -1364,7 +1364,11 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
             onZoomEnded(scale)
         }
 
-        func updateContentInset(for scrollView: UIScrollView) {
+        func updateContentInset(for scrollView: UIScrollView, syncContentSize: Bool = true) {
+            if syncContentSize {
+                syncZoomedContentSizeIfNeeded(for: scrollView)
+            }
+
             let panInset = panActivityInset(for: scrollView)
             let insetX = max(0, (scrollView.bounds.width - scrollView.contentSize.width) / 2) + panInset
             let insetY = max(0, (scrollView.bounds.height - scrollView.contentSize.height) / 2) + panInset
@@ -1392,6 +1396,21 @@ private struct PrototypingZoomableStage<Content: View>: UIViewRepresentable {
                 trailingInset: scrollView.contentInset.bottom
             )
             scrollView.setContentOffset(CGPoint(x: offsetX, y: offsetY), animated: false)
+        }
+
+        private func syncZoomedContentSizeIfNeeded(for scrollView: UIScrollView) {
+            guard lastCanvasSize.width > 0, lastCanvasSize.height > 0 else { return }
+
+            let scale = max(scrollView.zoomScale, 0.001)
+            let expectedSize = CGSize(
+                width: lastCanvasSize.width * scale,
+                height: lastCanvasSize.height * scale
+            )
+            guard abs(scrollView.contentSize.width - expectedSize.width) > 0.5
+                    || abs(scrollView.contentSize.height - expectedSize.height) > 0.5
+            else { return }
+
+            scrollView.contentSize = expectedSize
         }
 
         private func panActivityInset(for scrollView: UIScrollView) -> CGFloat {
