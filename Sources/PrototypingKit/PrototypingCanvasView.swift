@@ -1099,8 +1099,23 @@ private struct PrototypingElementView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private func button(_ size: CGSize) -> some View {
         let style = element.buttonStyle ?? .primary
+
+        switch style {
+        case .circle:
+            circularButton(size, isOutlined: false)
+        case .circleOutline:
+            circularButton(size, isOutlined: true)
+        case .iconSquare:
+            iconSquareButton(size)
+        default:
+            standardButton(size, style: style)
+        }
+    }
+
+    private func standardButton(_ size: CGSize, style: PrototypingButtonStyle) -> some View {
         let cornerRadius = style == .pill ? size.height / 2 : min(12, size.height * 0.28)
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
@@ -1124,13 +1139,56 @@ private struct PrototypingElementView: View {
         }
     }
 
+    private func circularButton(_ size: CGSize, isOutlined: Bool) -> some View {
+        let diameter = max(1, min(size.width, size.height))
+
+        return ZStack {
+            Circle()
+                .fill(isOutlined ? Color.white.opacity(0.52) : Color.blue.opacity(0.78))
+                .frame(width: diameter, height: diameter)
+
+            Circle()
+                .stroke(
+                    isOutlined ? Color.blue.opacity(0.72) : Color.clear,
+                    lineWidth: isOutlined ? max(1.4, diameter * 0.04) : 0
+                )
+                .frame(width: diameter, height: diameter)
+
+            Circle()
+                .fill(isOutlined ? Color.blue.opacity(0.68) : Color.white.opacity(0.84))
+                .frame(width: max(8, diameter * 0.24), height: max(8, diameter * 0.24))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func iconSquareButton(_ size: CGSize) -> some View {
+        let side = max(1, min(size.width, size.height))
+        let shape = RoundedRectangle(cornerRadius: min(16, side * 0.28), style: .continuous)
+
+        return ZStack {
+            shape
+                .fill(Color.black.opacity(0.72))
+                .frame(width: side, height: side)
+
+            VStack(spacing: max(3, side * 0.08)) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.86))
+                    .frame(width: side * 0.36, height: max(4, side * 0.09))
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.62))
+                    .frame(width: side * 0.24, height: max(3, side * 0.07))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func buttonFillColor(for style: PrototypingButtonStyle) -> Color {
         switch style {
-        case .primary, .pill:
+        case .primary, .pill, .circle:
             return Color.blue.opacity(0.78)
-        case .secondary:
+        case .secondary, .iconSquare:
             return Color.black.opacity(0.72)
-        case .outline:
+        case .outline, .circleOutline:
             return Color.white.opacity(0.48)
         case .soft:
             return Color.blue.opacity(0.14)
@@ -1141,7 +1199,7 @@ private struct PrototypingElementView: View {
 
     private func buttonStrokeColor(for style: PrototypingButtonStyle) -> Color {
         switch style {
-        case .outline:
+        case .outline, .circleOutline:
             return Color.blue.opacity(0.70)
         case .ghost:
             return Color.black.opacity(0.08)
@@ -1152,7 +1210,7 @@ private struct PrototypingElementView: View {
 
     private func buttonStrokeWidth(for style: PrototypingButtonStyle) -> CGFloat {
         switch style {
-        case .outline:
+        case .outline, .circleOutline:
             return 1.8
         case .ghost:
             return 1
@@ -1163,9 +1221,9 @@ private struct PrototypingElementView: View {
 
     private func buttonLineColor(for style: PrototypingButtonStyle) -> Color {
         switch style {
-        case .primary, .secondary, .pill:
+        case .primary, .secondary, .pill, .circle, .iconSquare:
             return Color.white.opacity(0.82)
-        case .outline, .soft, .ghost:
+        case .outline, .soft, .ghost, .circleOutline:
             return Color.blue.opacity(0.62)
         }
     }

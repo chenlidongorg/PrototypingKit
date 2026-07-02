@@ -13,12 +13,18 @@
 "button_style.ghost" = "文字";
 "button_style.outline" = "描邊";
 "button_style.pill" = "膠囊";
+"button_style.circle" = "圓形";
+"button_style.circle_outline" = "圓形描邊";
+"button_style.icon_square" = "方形圖示";
 "button_style.primary" = "主按鈕";
 "button_style.secondary" = "深色";
 "button_style.soft" = "柔和";
 "button_variant.dark" = "深色";
 "button_variant.outline" = "描邊";
 "button_variant.pill" = "膠囊";
+"button_variant.circle" = "圓形";
+"button_variant.circle_outline" = "圓形描邊";
+"button_variant.icon_square" = "方形圖示";
 "button_variant.rounded" = "圓角";
 "button_variant.soft" = "淺色";
 "button_variant.text" = "文字";
@@ -107,5 +113,6 @@
 "template.web_saas" = "SaaS首頁";
 "template.web_status" = "狀態頁";
 "toolbar.export" = "匯出";
-"toolbar.insert_canvas" = "放進畫布";
+"toolbar.insert_canvas" = "放進畫布當背景";
+"toolbar.insert_canvas_movable_object" = "放進畫布當移動物件";
 "toolbar.new" = "新增";

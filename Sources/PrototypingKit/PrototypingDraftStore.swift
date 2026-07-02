@@ -204,14 +204,20 @@ public final class PrototypingDraftStore: ObservableObject {
                 for: component,
                 canvasSize: document.canvasSize
             )
+            let styledBaseFrame = Self.frame(
+                baseFrame,
+                adjustedFor: buttonStyle ?? .primary,
+                component: component,
+                canvasSize: document.canvasSize.cgSize
+            )
             let annotationText = PrototypingDraftDocument.defaultAnnotationText
             let preferredFrame = component == .aiNote
                 ? PrototypingDraftDocument.annotationFrame(
                     for: annotationText,
-                    existingFrame: baseFrame,
+                    existingFrame: styledBaseFrame,
                     canvasSize: document.canvasSize.cgSize
                 )
-                : baseFrame
+                : styledBaseFrame
             let frame = nextAvailableFrame(
                 preferredFrame: preferredFrame,
                 in: document,
@@ -240,6 +246,12 @@ public final class PrototypingDraftStore: ObservableObject {
 
         var document = currentDocument
         document.elements[index].buttonStyle = style
+        document.elements[index].frame = Self.frame(
+            document.elements[index].frame,
+            adjustedFor: style,
+            component: .button,
+            canvasSize: document.canvasSize.cgSize
+        )
 
         if persist {
             document.updatedAt = Date()
@@ -250,6 +262,37 @@ public final class PrototypingDraftStore: ObservableObject {
         if persist {
             saveCurrentDocument()
         }
+    }
+
+    private static func frame(
+        _ frame: PrototypingElementFrame,
+        adjustedFor style: PrototypingButtonStyle,
+        component: PrototypingComponent,
+        canvasSize: CGSize
+    ) -> PrototypingElementFrame {
+        guard component == .button else { return frame }
+
+        let side: CGFloat
+        switch style {
+        case .circle, .circleOutline:
+            side = 64
+        case .iconSquare:
+            side = 58
+        default:
+            return frame
+        }
+
+        let resolvedSide = min(side, max(1, min(canvasSize.width, canvasSize.height)))
+        let rect = frame.cgRect
+        let x = max(0, min(canvasSize.width - resolvedSide, rect.midX - resolvedSide / 2))
+        let y = max(0, min(canvasSize.height - resolvedSide, rect.midY - resolvedSide / 2))
+
+        return PrototypingElementFrame(
+            x: Double(x),
+            y: Double(y),
+            width: Double(resolvedSide),
+            height: Double(resolvedSide)
+        )
     }
 
     public func bringElementToFront(id: String) {

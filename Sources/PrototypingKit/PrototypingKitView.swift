@@ -87,6 +87,12 @@ private extension PrototypingButtonStyle {
             return PrototypingL10n.text("button_variant.text")
         case .pill:
             return PrototypingL10n.text("button_variant.pill")
+        case .circle:
+            return PrototypingL10n.text("button_variant.circle")
+        case .circleOutline:
+            return PrototypingL10n.text("button_variant.circle_outline")
+        case .iconSquare:
+            return PrototypingL10n.text("button_variant.icon_square")
         }
     }
 }
@@ -194,29 +200,28 @@ public struct PrototypingKitView: View {
                 .buttonStyle(PlainButtonStyle())
                 .accessibilityLabel(PrototypingL10n.text("toolbar.new"))
 
-                HStack(spacing: isCompact ? 12 : 12) {
-                    Button(action: insertIntoHost) {
-                        toolbarInsertCanvasLabel(isCompact: isCompact)
+                Menu {
+                    Button(action: { insertIntoHost(recommendedIntent: .setAsBackground) }) {
+                        Label(PrototypingL10n.text("toolbar.insert_canvas"), systemImage: "photo")
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .accessibilityLabel(PrototypingL10n.text("toolbar.insert_canvas"))
-
-                    Menu {
-                        Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
-                            Label(PrototypingL10n.text("export.save_pdf"), systemImage: "doc.badge.plus")
-                        }
-                        Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
-                            Label(PrototypingL10n.text("export.share_pdf"), systemImage: "square.and.arrow.up")
-                        }
-                    } label: {
-                        toolbarSystemActionLabel(
-                            title: PrototypingL10n.text("toolbar.export"),
-                            systemImage: "square.and.arrow.up",
-                            isCompact: isCompact
-                        )
+                    Button(action: { insertIntoHost(recommendedIntent: .insertAsMovableObject) }) {
+                        Label(PrototypingL10n.text("toolbar.insert_canvas_movable_object"), systemImage: "rectangle.on.rectangle")
                     }
-                    .accessibilityLabel(PrototypingL10n.text("toolbar.export"))
+                    Divider()
+                    Button(action: { exportPDF(recommendedIntent: .savePDF) }) {
+                        Label(PrototypingL10n.text("export.save_pdf"), systemImage: "doc.badge.plus")
+                    }
+                    Button(action: { exportPDF(recommendedIntent: .sharePDF) }) {
+                        Label(PrototypingL10n.text("export.share_pdf"), systemImage: "square.and.arrow.up")
+                    }
+                } label: {
+                    toolbarSystemActionLabel(
+                        title: PrototypingL10n.text("toolbar.export"),
+                        systemImage: "square.and.arrow.up",
+                        isCompact: isCompact
+                    )
                 }
+                .accessibilityLabel(PrototypingL10n.text("toolbar.export"))
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -254,20 +259,6 @@ public struct PrototypingKitView: View {
                     .font(.system(size: 15, weight: .semibold))
             }
         }
-        .foregroundColor(PrototypingKitColors.ink)
-    }
-
-    private func toolbarInsertCanvasLabel(isCompact: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "square.on.square.squareshape.controlhandles")
-                .font(.system(size: isCompact ? 22 : 16, weight: .semibold))
-                .frame(width: isCompact ? 24 : 18, height: isCompact ? 24 : 18)
-            if !isCompact {
-                Text(PrototypingL10n.text("toolbar.insert_canvas"))
-            }
-        }
-        .frame(width: isCompact ? 34 : nil, height: 34)
-        .font(.system(size: 15, weight: .semibold))
         .foregroundColor(PrototypingKitColors.ink)
     }
 
@@ -825,7 +816,7 @@ public struct PrototypingKitView: View {
     }
 
     private var quickComponentItems: [PrototypingComponentItem] {
-        Array(uniqueComponentItems(recentComponentItems + recommendedComponentItems).prefix(8))
+        Array(uniqueComponentItems(recentComponentItems + recommendedComponentItems).prefix(10))
     }
 
     private var recommendedComponentItems: [PrototypingComponentItem] {
@@ -834,6 +825,7 @@ public struct PrototypingKitView: View {
                 .component(.title),
                 .component(.subtitle),
                 .button(.primary),
+                .button(.iconSquare),
                 .button(.outline),
                 .component(.topNavigation),
                 .component(.card),
@@ -845,6 +837,7 @@ public struct PrototypingKitView: View {
         return [
             .component(.title),
             .button(.primary),
+            .button(.circle),
             .button(.pill),
             .component(.input),
             .component(.search),
@@ -1055,8 +1048,8 @@ public struct PrototypingKitView: View {
             .foregroundColor(PrototypingKitColors.secondaryInk)
     }
 
-    private func insertIntoHost() {
-        onExport(store.exportImage(recommendedIntent: .setAsBackground))
+    private func insertIntoHost(recommendedIntent: PrototypingImportIntent) {
+        onExport(store.exportImage(recommendedIntent: recommendedIntent))
     }
 
     private func exportPDF(recommendedIntent: PrototypingImportIntent) {

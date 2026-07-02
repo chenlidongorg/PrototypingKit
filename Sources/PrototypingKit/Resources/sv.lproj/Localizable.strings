@@ -13,12 +13,18 @@
 "button_style.ghost" = "Text";
 "button_style.outline" = "Outline";
 "button_style.pill" = "Pill";
+"button_style.circle" = "Circle";
+"button_style.circle_outline" = "Outline circle";
+"button_style.icon_square" = "Icon square";
 "button_style.primary" = "Primary";
 "button_style.secondary" = "Dark";
 "button_style.soft" = "Soft";
 "button_variant.dark" = "Dark";
 "button_variant.outline" = "Outline";
 "button_variant.pill" = "Pill";
+"button_variant.circle" = "Circle";
+"button_variant.circle_outline" = "Outline circle";
+"button_variant.icon_square" = "Icon square";
 "button_variant.rounded" = "Rounded";
 "button_variant.soft" = "Soft";
 "button_variant.text" = "Text";
@@ -107,5 +113,6 @@
 "template.web_saas" = "SaaS";
 "template.web_status" = "Status";
 "toolbar.export" = "Export";
-"toolbar.insert_canvas" = "To Canvas";
+"toolbar.insert_canvas" = "To Canvas as Background";
+"toolbar.insert_canvas_movable_object" = "To Canvas as Movable Object";
 "toolbar.new" = "New";

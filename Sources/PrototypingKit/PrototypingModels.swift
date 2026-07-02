@@ -362,6 +362,9 @@ public enum PrototypingButtonStyle: String, Codable, CaseIterable, Identifiable 
     case soft
     case ghost
     case pill
+    case circle
+    case circleOutline
+    case iconSquare
 
     public var id: String { rawValue }
 
@@ -379,6 +382,12 @@ public enum PrototypingButtonStyle: String, Codable, CaseIterable, Identifiable 
             return PrototypingL10n.text("button_style.ghost")
         case .pill:
             return PrototypingL10n.text("button_style.pill")
+        case .circle:
+            return PrototypingL10n.text("button_style.circle")
+        case .circleOutline:
+            return PrototypingL10n.text("button_style.circle_outline")
+        case .iconSquare:
+            return PrototypingL10n.text("button_style.icon_square")
         }
     }
 }
